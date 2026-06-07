@@ -1,0 +1,156 @@
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap');
+
+:root {
+  --font-sans: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  
+  /* Palette HSL Tailored Premium */
+  --primary: hsl(243, 75%, 59%);
+  --primary-hover: hsl(243, 75%, 52%);
+  --primary-light: hsl(243, 75%, 95%);
+  --secondary: hsl(330, 81%, 60%);
+  --secondary-hover: hsl(330, 81%, 53%);
+  --secondary-light: hsl(330, 81%, 95%);
+  
+  --success: hsl(150, 84%, 37%);
+  --success-light: hsl(150, 84%, 96%);
+  --warning: hsl(38, 92%, 50%);
+  --warning-light: hsl(38, 92%, 96%);
+  --error: hsl(0, 79%, 56%);
+  --error-light: hsl(0, 79%, 96%);
+  
+  --background: hsl(210, 20%, 98%);
+  --surface: hsl(0, 0%, 100%);
+  --border: hsl(210, 16%, 93%);
+  
+  --text: hsl(220, 26%, 14%);
+  --text-muted: hsl(220, 12%, 46%);
+  --text-light: hsl(220, 12%, 60%);
+  
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 20px;
+  --radius-full: 9999px;
+  
+  --shadow-sm: 0 1px 3px 0 rgba(0, 0, 0, 0.05), 0 1px 2px -1px rgba(0, 0, 0, 0.05);
+  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -2px rgba(0, 0, 0, 0.05);
+  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.05), 0 4px 6px -4px rgba(0, 0, 0, 0.05);
+  --shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.08), 0 8px 10px -6px rgba(0, 0, 0, 0.08);
+
+  --transition-fast: 0.15s cubic-bezier(0.4, 0, 0.2, 1);
+  --transition-normal: 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --background: hsl(222, 47%, 11%);
+    --surface: hsl(224, 47%, 14%);
+    --border: hsl(223, 27%, 20%);
+    --primary-light: hsl(243, 75%, 20%);
+    
+    --text: hsl(210, 40%, 98%);
+    --text-muted: hsl(215, 20%, 75%);
+    --text-light: hsl(215, 15%, 60%);
+    
+    --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.3);
+    --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.3);
+    --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.4);
+    --shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.5);
+  }
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: var(--font-sans);
+  background-color: var(--background);
+  color: var(--text);
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  overflow-x: hidden;
+  transition: background-color var(--transition-normal);
+}
+
+input, select, textarea, button {
+  font-family: inherit;
+  font-size: inherit;
+  color: inherit;
+}
+
+button {
+  cursor: pointer;
+  border: none;
+  background: none;
+  outline: none;
+}
+
+/* Scrollbar personnalisée et élégante */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: var(--radius-full);
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--text-light);
+}
+
+/* Animations globales */
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes slideIn {
+  from { transform: translateX(100%); }
+  to { transform: translateX(0); }
+}
+
+@keyframes scaleIn {
+  from { opacity: 0; transform: scale(0.96); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+.animate-fade-in {
+  animation: fadeIn var(--transition-normal) forwards;
+}
+
+.animate-scale-in {
+  animation: scaleIn var(--transition-normal) forwards;
+}
+
+/* Utility Layout classes */
+.container {
+  width: 100%;
+  max-width: 480px; /* Centré mobile-first */
+  margin: 0 auto;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  background-color: var(--background);
+  box-shadow: var(--shadow-xl);
+  position: relative;
+}
+
+@media (min-width: 480px) {
+  body {
+    background-color: hsl(220, 20%, 92%);
+  }
+  @media (prefers-color-scheme: dark) {
+    body {
+      background-color: hsl(222, 47%, 7%);
+    }
+  }
+}
