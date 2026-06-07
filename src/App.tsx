@@ -13,7 +13,8 @@ import {
   CheckCircle2,
   Copy,
   LogOut,
-  ChevronRight
+  ChevronRight,
+  User
 } from 'lucide-react';
 import {
   supabase,
@@ -59,8 +60,8 @@ export default function App() {
   
   // Navigation & Simulation
   const [activeTab, setActiveTab] = useState<'dashboard' | 'history' | 'charts' | 'settings'>('dashboard');
-  const [currentPartner, setCurrentPartner] = useState<'partner1' | 'partner2'>(
-    (localStorage.getItem('share_it_partner') as 'partner1' | 'partner2') || 'partner1'
+  const [currentPartner, setCurrentPartner] = useState<'partner1' | 'partner2' | null>(
+    localStorage.getItem('share_it_partner') as 'partner1' | 'partner2' | null
   );
 
   // Db State
@@ -141,12 +142,6 @@ export default function App() {
   };
 
   // Switch Partner simulator
-  const togglePartner = () => {
-    const next = currentPartner === 'partner1' ? 'partner2' : 'partner1';
-    setCurrentPartner(next);
-    localStorage.setItem('share_it_partner', next);
-    addNotification(`Utilisateur actif : ${getPartnerName(next)}`);
-  };
 
   const getPartnerName = (key: 'partner1' | 'partner2' | string) => {
     if (!household) return key === 'partner1' ? 'Sam' : 'Aurélie';
@@ -419,7 +414,7 @@ export default function App() {
           amount,
           split_method: chargeSplit,
           is_recurring: chargeRecurring,
-          added_by: currentPartner,
+          added_by: currentPartner!,
           modified_by: null
         });
         addNotification(`Charge "${chargeLabel}" ajoutée`);
@@ -491,7 +486,7 @@ export default function App() {
       } else {
         await insertAdvance({
           month_id: selectedMonthId,
-          assigned_to: currentPartner,
+          assigned_to: currentPartner!,
           amount,
           label: advLabel,
           modified_by: null
@@ -1064,6 +1059,53 @@ export default function App() {
     );
   }
 
+  // Écran de sélection du membre connecté
+  if (householdId && household && !currentPartner) {
+    return (
+      <div className="container animate-fade-in" style={{ justifyContent: 'center', minHeight: '100vh', padding: '24px' }}>
+        <div className="card" style={{ gap: '20px', padding: '28px', borderRadius: 'var(--radius-lg)', textAlign: 'center', maxWidth: '400px', width: '100%', margin: '0 auto' }}>
+          <div>
+            <h1 style={{ fontSize: '28px', fontWeight: '800', color: 'var(--primary)', marginBottom: '8px' }}>Share It</h1>
+            <p style={{ fontSize: '14px', color: 'var(--text-muted)' }}>
+              Foyer : <strong>{household.name}</strong>
+            </p>
+          </div>
+          
+          <div style={{ borderBottom: '1px solid var(--border)', margin: '8px 0' }} />
+          
+          <div>
+            <h2 style={{ fontSize: '18px', fontWeight: '700', marginBottom: '16px' }}>Qui utilise cet appareil ?</h2>
+            <p style={{ fontSize: '13px', color: 'var(--text-muted)', marginBottom: '20px' }}>
+              Sélectionnez votre profil. Ce choix sera enregistré pour cet appareil pour sécuriser vos saisies.
+            </p>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+              <button 
+                className="btn-primary" 
+                style={{ padding: '16px', fontSize: '16px', fontWeight: '700' }}
+                onClick={() => {
+                  setCurrentPartner('partner1');
+                  localStorage.setItem('share_it_partner', 'partner1');
+                }}
+              >
+                {household.partner1_name}
+              </button>
+              <button 
+                className="btn-primary" 
+                style={{ padding: '16px', fontSize: '16px', fontWeight: '700', background: 'var(--secondary)', borderColor: 'var(--secondary)' }}
+                onClick={() => {
+                  setCurrentPartner('partner2');
+                  localStorage.setItem('share_it_partner', 'partner2');
+                }}
+              >
+                {household.partner2_name}
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   const p1Name = household.partner1_name;
   const p2Name = household.partner2_name;
 
@@ -1089,11 +1131,11 @@ export default function App() {
           <span>Sync. Supabase active</span>
         </div>
         
-        {/* Toggle utilisateur actif simulator */}
-        <button className="hud-btn" onClick={togglePartner}>
-          <RefreshCw size={12} />
-          <span>Actif : {getPartnerName(currentPartner)}</span>
-        </button>
+        {/* Indicateur de profil actif */}
+        <div className="hud-btn" style={{ cursor: 'default', background: 'transparent', borderColor: 'transparent', display: 'flex', alignItems: 'center', gap: '6px' }}>
+          <User size={14} style={{ color: 'var(--primary)' }} />
+          <span style={{ fontWeight: '600' }}>{currentPartner ? getPartnerName(currentPartner) : ''}</span>
+        </div>
       </div>
 
       {/* 2. Indicateur de frappe (simulé par websocket) */}
@@ -1778,6 +1820,26 @@ export default function App() {
               </div>
             </div>
 
+            {/* Profil de cet appareil */}
+            <div className="card" style={{ gap: '10px' }}>
+              <span style={{ fontWeight: '700', fontSize: '14px' }}>Profil de cet appareil</span>
+              <p style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
+                Cet appareil est configuré pour l'espace de <strong>{currentPartner ? getPartnerName(currentPartner) : ''}</strong>. Les saisies et modifications de charges seront signées à votre nom.
+              </p>
+              <button 
+                className="btn-secondary" 
+                style={{ width: '100%', borderColor: 'var(--border)' }}
+                onClick={() => {
+                  if (window.confirm("Voulez-vous modifier le profil membre associé à cet appareil ?")) {
+                    setCurrentPartner(null);
+                    localStorage.removeItem('share_it_partner');
+                  }
+                }}
+              >
+                Changer de membre connecté
+              </button>
+            </div>
+
             {/* Formulaire de paramétrage profil */}
             <div className="card">
               <span style={{ fontWeight: '700', fontSize: '14px' }}>Profil & Budgets par défaut</span>
@@ -2001,7 +2063,7 @@ export default function App() {
               <h3 className="modal-title">{advanceToEdit ? "Modifier le paiement / avance" : "Déclarer un paiement / avance"}</h3>
             </div>
             <p style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
-              Déclarez un achat ou paiement fait directement par {getPartnerName(advanceToEdit ? advanceToEdit.assigned_to : currentPartner)} ce mois-ci.
+              Déclarez un achat ou paiement fait directement par {getPartnerName(advanceToEdit ? advanceToEdit.assigned_to : currentPartner!)} ce mois-ci.
             </p>
 
             <div className="form-group">
