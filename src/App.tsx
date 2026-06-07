@@ -1028,10 +1028,10 @@ export default function App() {
     const avanceDeduireAurelie = (totalAutresSam - totalAutresAurelie) / 2;
 
     // Calcul final des virements au compte commun
-    // TOTAL À VIRER = ARRONDI.SUP(Total charges + Avance, 2) − Total autres
+    // TOTAL À VIRER = ARRONDI.SUP(Total charges + Avance, 2)
     // Total charges est représenté par totalDue1 et totalDue2 (la somme de toutes les parts de charges de chaque personne)
-    const virementSam = Math.ceil((totalDue1 + avanceDeduireSam) * 100) / 100 - totalAutresSam;
-    const virementAurelie = Math.ceil((totalDue2 + avanceDeduireAurelie) * 100) / 100 - totalAutresAurelie;
+    const virementSam = Math.ceil((totalDue1 + avanceDeduireSam) * 100) / 100;
+    const virementAurelie = Math.ceil((totalDue2 + avanceDeduireAurelie) * 100) / 100;
 
     const totalPaid1 = directPaid1 + manualAdv1;
     const totalPaid2 = directPaid2 + manualAdv2;
@@ -1259,13 +1259,11 @@ export default function App() {
   const activeName = currentPartner === 'partner1' ? p1Name : p2Name;
   const activeDue = currentPartner === 'partner1' ? calculations.totalDue1 : calculations.totalDue2;
   const activeAvance = currentPartner === 'partner1' ? calculations.avanceDeduireSam : calculations.avanceDeduireAurelie;
-  const activeAutres = currentPartner === 'partner1' ? calculations.totalAutresSam : calculations.totalAutresAurelie;
   const activeVirement = currentPartner === 'partner1' ? calculations.virementSam : calculations.virementAurelie;
 
   const otherName = currentPartner === 'partner1' ? p2Name : p1Name;
   const otherDue = currentPartner === 'partner1' ? calculations.totalDue2 : calculations.totalDue1;
   const otherAvance = currentPartner === 'partner1' ? calculations.avanceDeduireAurelie : calculations.avanceDeduireSam;
-  const otherAutres = currentPartner === 'partner1' ? calculations.totalAutresAurelie : calculations.totalAutresSam;
   const otherVirement = currentPartner === 'partner1' ? calculations.virementAurelie : calculations.virementSam;
 
   return (
@@ -1670,15 +1668,11 @@ export default function App() {
                   <span>Votre part des charges (Quote-part) :</span>
                   <span style={{ fontWeight: '600' }}>{activeDue.toFixed(2)} €</span>
                 </div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', marginBottom: '3px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', marginBottom: '8px' }}>
                   <span>Avance à déduire (Rééquilibrage) :</span>
                   <span style={{ fontWeight: '600', color: activeAvance >= 0 ? 'var(--error)' : 'var(--success)' }}>
                     {activeAvance >= 0 ? '+' : ''}{activeAvance.toFixed(2)} €
                   </span>
-                </div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', marginBottom: '8px' }}>
-                  <span>Dépenses directes déjà payées :</span>
-                  <span style={{ fontWeight: '600', color: 'var(--success)' }}>-{activeAutres.toFixed(2)} €</span>
                 </div>
                 <div style={{ borderTop: '1px solid var(--border)', paddingTop: '8px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                   <span style={{ fontWeight: '700', fontSize: '14px' }}>
@@ -1699,15 +1693,11 @@ export default function App() {
                   <span>Part des charges de {otherName} :</span>
                   <span style={{ fontWeight: '600' }}>{otherDue.toFixed(2)} €</span>
                 </div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', marginBottom: '3px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', marginBottom: '8px' }}>
                   <span>Avance à déduire (Rééquilibrage) :</span>
                   <span style={{ fontWeight: '600', color: otherAvance >= 0 ? 'var(--error)' : 'var(--success)' }}>
                     {otherAvance >= 0 ? '+' : ''}{otherAvance.toFixed(2)} €
                   </span>
-                </div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', marginBottom: '8px' }}>
-                  <span>Dépenses directes déjà payées :</span>
-                  <span style={{ fontWeight: '600', color: 'var(--success)' }}>-{otherAutres.toFixed(2)} €</span>
                 </div>
                 <div style={{ borderTop: '1px solid var(--border)', paddingTop: '8px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                   <span style={{ fontWeight: '700', fontSize: '13px' }}>
