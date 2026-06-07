@@ -1207,7 +1207,7 @@ export default function App() {
   const otherVirement = currentPartner === 'partner1' ? calculations.virementAurelie : calculations.virementSam;
 
   return (
-    <div className="container animate-fade-in">
+    <div className="container">
       
       {/* 1. HUD Collaboratif & Indicateur Temps Réel */}
       <div className="hud-banner" style={{ borderRadius: 0, borderBottom: '1px solid var(--border)', borderTop: 'none', borderLeft: 'none', borderRight: 'none', background: 'var(--surface)' }}>
