@@ -303,6 +303,42 @@ export default function App() {
     };
   }, [isConfigured, householdId, selectedMonthId, currentPartner, months]);
 
+  // Ajuster automatiquement la vue et le focus lorsqu'un formulaire (modal) s'ouvre
+  useEffect(() => {
+    const isAnyModalOpen = 
+      showAddChargeModal || 
+      showEditSalariesModal || 
+      showAddCategoryModal || 
+      !!categoryToRename || 
+      showAddTemplateModal || 
+      showCreateMonthModal;
+
+    if (isAnyModalOpen) {
+      const timer = setTimeout(() => {
+        // 1. Remonter le scroll du modal-content et s'assurer qu'il est visible / centré
+        const modalContent = document.querySelector('.modal-content');
+        if (modalContent) {
+          modalContent.scrollTo({ top: 0 });
+          modalContent.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+        
+        // 2. Focus sur le premier input
+        const firstInput = document.querySelector('.modal-content input, .modal-content select') as HTMLInputElement | HTMLSelectElement | null;
+        if (firstInput) {
+          firstInput.focus();
+        }
+      }, 100);
+      return () => clearTimeout(timer);
+    }
+  }, [
+    showAddChargeModal, 
+    showEditSalariesModal, 
+    showAddCategoryModal, 
+    categoryToRename, 
+    showAddTemplateModal, 
+    showCreateMonthModal
+  ]);
+
   // Simulation d'activité du partenaire
   const triggerTypingSimulation = (msg: string) => {
     setPartnerTypingText(msg);
@@ -388,11 +424,20 @@ export default function App() {
       const amount = parseFloat(chargeAmount) || 0;
       if (chargeToEdit) {
         let modified_by = chargeToEdit.modified_by;
-        if (amount !== chargeToEdit.amount) {
-          if (currentPartner !== chargeToEdit.added_by) {
-            modified_by = currentPartner;
-          } else {
-            modified_by = null;
+        let added_by = chargeToEdit.added_by;
+        let is_validated = chargeToEdit.is_validated;
+
+        if (chargeToEdit.is_validated === false) {
+          is_validated = true;
+          added_by = currentPartner!;
+          modified_by = null;
+        } else {
+          if (amount !== chargeToEdit.amount) {
+            if (currentPartner !== chargeToEdit.added_by) {
+              modified_by = currentPartner;
+            } else {
+              modified_by = null;
+            }
           }
         }
 
@@ -403,7 +448,9 @@ export default function App() {
           category_id: chargeCat,
           split_method: chargeSplit,
           is_recurring: chargeRecurring,
-          modified_by
+          added_by,
+          modified_by,
+          is_validated
         });
         addNotification(`Charge "${chargeLabel}" modifiée`);
       } else {
@@ -415,7 +462,8 @@ export default function App() {
           split_method: chargeSplit,
           is_recurring: chargeRecurring,
           added_by: currentPartner!,
-          modified_by: null
+          modified_by: null,
+          is_validated: true
         });
         addNotification(`Charge "${chargeLabel}" ajoutée`);
       }
@@ -436,6 +484,21 @@ export default function App() {
     try {
       await deleteCharge(id);
       addNotification(`Charge "${label}" supprimée`);
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const handleValidateCharge = async (charge: ChargeType) => {
+    if (!charge.id) return;
+    try {
+      await updateCharge({
+        ...charge,
+        is_validated: true,
+        added_by: currentPartner!,
+        modified_by: null
+      });
+      addNotification(`Charge "${charge.label}" validée`);
     } catch (err) {
       console.error(err);
     }
@@ -581,6 +644,11 @@ export default function App() {
   // --- ACTIONS MONTH WORKFLOW ---
   const handleProposeClosure = async () => {
     if (!selectedMonth) return;
+    const hasUnvalidated = charges.some(c => c.is_validated === false);
+    if (hasUnvalidated) {
+      alert("Impossible de proposer la clôture : certaines charges reconduites n'ont pas encore été validées ou modifiées.");
+      return;
+    }
     try {
       const updated = {
         ...selectedMonth,
@@ -1241,7 +1309,13 @@ export default function App() {
               {/* Statut & Actions Clôture */}
               <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
                 {selectedMonth.status === 'draft' || selectedMonth.status === 'reopened' ? (
-                  <button className="hud-btn" onClick={handleProposeClosure}>
+                  <button
+                    className="hud-btn"
+                    onClick={handleProposeClosure}
+                    disabled={charges.some(c => c.is_validated === false)}
+                    style={charges.some(c => c.is_validated === false) ? { opacity: 0.5, cursor: 'not-allowed' } : {}}
+                    title={charges.some(c => c.is_validated === false) ? "Certaines charges reconduites doivent être validées ou modifiées" : ""}
+                  >
                     Proposer clôture
                   </button>
                 ) : selectedMonth.status === 'pending_close' ? (
@@ -1263,6 +1337,16 @@ export default function App() {
                 )}
               </div>
             </div>
+
+            {/* Alerte charges reconduites non validées */}
+            {charges.some(c => c.is_validated === false) && (
+              <div className="card" style={{ background: 'var(--warning-light)', borderColor: 'var(--warning)', color: 'var(--warning)', display: 'flex', alignItems: 'center', gap: '8px', padding: '10px 14px', marginBottom: '12px' }}>
+                <AlertCircle size={16} style={{ flexShrink: 0 }} />
+                <span style={{ fontSize: '13px', fontWeight: '600' }}>
+                  Certaines charges basiques et enfant ont été reconduites du mois précédent et doivent être validées ou modifiées avant de pouvoir proposer la clôture.
+                </span>
+              </div>
+            )}
 
             {/* Revenus & Ratios */}
             <div className="card" style={{ background: 'var(--primary-light)', borderColor: 'hsla(243, 75%, 59%, 0.1)' }}>
@@ -1360,10 +1444,19 @@ export default function App() {
                           <div className="charge-title">
                             <span>{charge.label}</span>
                             {charge.is_recurring && <RefreshCw size={10} style={{ color: 'var(--primary)' }} />}
+                            {charge.is_validated === false && (
+                              <span className="badge-status pending" style={{ marginLeft: '6px', fontSize: '9px', padding: '1px 6px' }}>À valider ⏳</span>
+                            )}
                           </div>
                           <div className="charge-meta">
-                            Saisi par : {getPartnerName(charge.added_by)}
-                            {charge.modified_by && ` • Modifié par : ${getPartnerName(charge.modified_by)}`}
+                            {charge.is_validated === false ? (
+                              <span style={{ color: 'var(--warning)', fontWeight: 'bold' }}>Reconduite • Non validée</span>
+                            ) : (
+                              <>
+                                Saisi par : {getPartnerName(charge.added_by)}
+                                {charge.modified_by && ` • Modifié par : ${getPartnerName(charge.modified_by)}`}
+                              </>
+                            )}
                             {` • Clé : `}
                             {
                               charge.split_method === 'proportional' ? 'Prorata' :
@@ -1395,10 +1488,24 @@ export default function App() {
 
                         {(selectedMonth.status === 'draft' || selectedMonth.status === 'reopened') && (
                           <div className="actions-row">
-                            <button className="btn-icon" onClick={() => openEditCharge(charge)}>
+                            {charge.is_validated === false && (
+                              <button 
+                                className="btn-icon" 
+                                style={{ background: 'var(--success-light)', color: 'var(--success)', display: 'flex', alignItems: 'center', justifyContent: 'center' }} 
+                                onClick={() => handleValidateCharge(charge)}
+                                title="Valider la charge reconduite"
+                              >
+                                <CheckCircle2 size={13} />
+                              </button>
+                            )}
+                            <button 
+                              className="btn-icon" 
+                              onClick={() => openEditCharge(charge)}
+                              title={charge.is_validated === false ? "Modifier et valider" : "Modifier"}
+                            >
                               <Edit2 size={13} />
                             </button>
-                            <button className="btn-icon delete" onClick={() => handleDeleteCharge(charge.id!, charge.label)}>
+                            <button className="btn-icon delete" onClick={() => handleDeleteCharge(charge.id!, charge.label)} title="Supprimer">
                               <Trash2 size={13} />
                             </button>
                           </div>
@@ -1551,12 +1658,7 @@ export default function App() {
               </div>
             </div>
 
-            {/* FAB d'ajout de charge */}
-            {(selectedMonth.status === 'draft' || selectedMonth.status === 'reopened') && (
-              <button className="fab" onClick={() => setShowAddChargeModal(true)}>
-                <Plus size={24} />
-              </button>
-            )}
+
           </>
         )}
 
@@ -2327,6 +2429,25 @@ export default function App() {
             </div>
           </div>
         </div>
+      )}
+
+      {/* FAB d'ajout de charge (flottant, accessible à tout moment si le mois est actif) */}
+      {selectedMonth && (selectedMonth.status === 'draft' || selectedMonth.status === 'reopened') && (
+        <button
+          className="fab"
+          onClick={() => {
+            setChargeToEdit(null);
+            setChargeLabel('');
+            setChargeAmount('');
+            setChargeCat(categories[0]?.id || 'basiques');
+            setChargeSplit('proportional');
+            setChargeRecurring(false);
+            setShowAddChargeModal(true);
+          }}
+          title="Ajouter une charge"
+        >
+          <Plus size={24} />
+        </button>
       )}
 
       {/* --- BARRE DE NAVIGATION INFÉRIEURE (BOTTOM NAV) --- */}

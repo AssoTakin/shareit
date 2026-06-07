@@ -509,6 +509,13 @@
   transition: transform var(--transition-fast);
 }
 
+@media (min-width: 480px) {
+  .fab {
+    left: calc(50% + 240px - 16px - 52px);
+    right: auto;
+  }
+}
+
 .fab:active {
   transform: scale(0.9);
 }

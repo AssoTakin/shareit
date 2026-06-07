@@ -50,6 +50,7 @@ create table if not exists charges (
   is_recurring boolean default false not null,
   added_by text not null, -- 'partner1' or 'partner2'
   modified_by text, -- 'partner1' or 'partner2' (indique qui a modifié le montant en dernier si différent du créateur)
+  is_validated boolean default true not null,
   created_at timestamp with time zone default timezone('utc'::text, now()) not null,
   updated_at timestamp with time zone default timezone('utc'::text, now()) not null
 );

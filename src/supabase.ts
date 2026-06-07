@@ -49,6 +49,7 @@ export interface Charge {
   is_recurring: boolean;
   added_by: string; // 'partner1' or 'partner2'
   modified_by?: string | null;
+  is_validated?: boolean;
   created_at?: string;
   updated_at?: string;
 }
@@ -232,6 +233,7 @@ export async function updateCharge(charge: Charge): Promise<Charge> {
       split_method: charge.split_method,
       is_recurring: charge.is_recurring,
       modified_by: charge.modified_by,
+      is_validated: charge.is_validated,
       updated_at: new Date().toISOString(),
     })
     .eq('id', charge.id)
@@ -350,35 +352,66 @@ export async function createNewMonth(householdId: string, year: number, monthNum
   
   const createdMonth = await insertMonth(newMonth);
 
-  // 3. Charger et insérer les modèles récurrents actifs
-  const { data: templates, error: tempError } = await supabase
-    .from('templates')
+  // 3. Essayer de charger les charges du mois précédent chronologique (catégories 'basiques' et 'maia')
+  let prevYear = year;
+  let prevMonthNum = monthNumber - 1;
+  if (prevMonthNum === 0) {
+    prevMonthNum = 12;
+    prevYear = year - 1;
+  }
+  const prevMonthId = `${householdId}_${prevYear}_${prevMonthNum}`;
+  
+  let { data: chargesToCopy, error: prevError } = await supabase
+    .from('charges')
     .select('*')
-    .eq('household_id', householdId)
-    .eq('is_active', true);
-    
-  if (tempError) throw tempError;
+    .eq('month_id', prevMonthId)
+    .in('category_id', ['basiques', 'maia']);
 
-  if (templates && templates.length > 0) {
-    const chargesToInsert = templates.map(t => ({
+  // Si aucun enregistrement chronologique direct, essayer de prendre le dernier mois existant
+  if (prevError || !chargesToCopy || chargesToCopy.length === 0) {
+    const { data: latestMonthArr } = await supabase
+      .from('months')
+      .select('id')
+      .eq('household_id', householdId)
+      .neq('id', monthId)
+      .order('year', { ascending: false })
+      .order('month', { ascending: false })
+      .limit(1);
+
+    if (latestMonthArr && latestMonthArr.length > 0) {
+      const { data: latestCharges } = await supabase
+        .from('charges')
+        .select('*')
+        .eq('month_id', latestMonthArr[0].id)
+        .in('category_id', ['basiques', 'maia']);
+      if (latestCharges && latestCharges.length > 0) {
+        chargesToCopy = latestCharges;
+      }
+    }
+  }
+
+  // Insérer les charges copiées (avec is_validated = false)
+  if (chargesToCopy && chargesToCopy.length > 0) {
+    const chargesToInsert = chargesToCopy.map(c => ({
       month_id: monthId,
-      category_id: t.category_id,
-      label: t.label,
-      amount: t.default_amount,
-      split_method: t.split_method,
-      is_recurring: true,
-      added_by: 'partner1'
+      category_id: c.category_id,
+      label: c.label,
+      amount: c.amount,
+      split_method: c.split_method,
+      is_recurring: c.is_recurring,
+      added_by: c.added_by,
+      modified_by: c.modified_by || null,
+      is_validated: false
     }));
     const { error: insertError } = await supabase.from('charges').insert(chargesToInsert);
     if (insertError) throw insertError;
   } else {
-    // Scaffold initial si aucun modèle
+    // Scaffold initial si aucun mois précédent ou historique n'existe
     const defaultCharges = [
-      { month_id: monthId, category_id: 'basiques', label: 'Loyer', amount: 1200.0, split_method: 'proportional', is_recurring: true, added_by: 'partner1' },
-      { month_id: monthId, category_id: 'basiques', label: 'Alimentation', amount: 400.0, split_method: '50_50', is_recurring: true, added_by: 'partner2' },
-      { month_id: monthId, category_id: 'basiques', label: 'EDF/GDF', amount: 100.10, split_method: '50_50', is_recurring: true, added_by: 'partner1' },
-      { month_id: monthId, category_id: 'maia', label: 'Nounou / Crèche', amount: 350.0, split_method: 'proportional', is_recurring: true, added_by: 'partner1' },
-      { month_id: monthId, category_id: 'autres', label: 'Internet & Mobile', amount: 39.99, split_method: '50_50', is_recurring: true, added_by: 'partner2' }
+      { month_id: monthId, category_id: 'basiques', label: 'Loyer', amount: 1200.0, split_method: 'proportional', is_recurring: true, added_by: 'partner1', modified_by: null, is_validated: false },
+      { month_id: monthId, category_id: 'basiques', label: 'Alimentation', amount: 400.0, split_method: '50_50', is_recurring: true, added_by: 'partner2', modified_by: null, is_validated: false },
+      { month_id: monthId, category_id: 'basiques', label: 'EDF/GDF', amount: 100.10, split_method: '50_50', is_recurring: true, added_by: 'partner1', modified_by: null, is_validated: false },
+      { month_id: monthId, category_id: 'maia', label: 'Nounou / Crèche', amount: 350.0, split_method: 'proportional', is_recurring: true, added_by: 'partner1', modified_by: null, is_validated: false }
     ];
     const { error: insertError } = await supabase.from('charges').insert(defaultCharges);
     if (insertError) throw insertError;
