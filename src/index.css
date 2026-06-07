@@ -47,6 +47,13 @@
     --border: hsl(223, 27%, 20%);
     --primary-light: hsl(243, 75%, 20%);
     
+    --success: hsl(150, 84%, 45%);
+    --success-light: hsl(150, 84%, 12%);
+    --warning: hsl(38, 92%, 60%);
+    --warning-light: hsl(38, 92%, 12%);
+    --error: hsl(0, 79%, 65%);
+    --error-light: hsl(0, 79%, 12%);
+    
     --text: hsl(210, 40%, 98%);
     --text-muted: hsl(215, 20%, 75%);
     --text-light: hsl(215, 15%, 60%);
