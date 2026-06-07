@@ -33,6 +33,7 @@ import {
   deleteCharge,
   getAdvances,
   insertAdvance,
+  updateAdvance,
   deleteAdvance,
   getTemplates,
   insertTemplate,
@@ -81,6 +82,7 @@ export default function App() {
   const [chargeToEdit, setChargeToEdit] = useState<ChargeType | null>(null);
   
   const [showAddAdvanceModal, setShowAddAdvanceModal] = useState(false);
+  const [advanceToEdit, setAdvanceToEdit] = useState<AdvanceType | null>(null);
   const [showEditSalariesModal, setShowEditSalariesModal] = useState(false);
   
   const [showAddCategoryModal, setShowAddCategoryModal] = useState(false);
@@ -458,14 +460,25 @@ export default function App() {
     if (!selectedMonthId || !advLabel || !advAmount) return;
     try {
       const amount = parseFloat(advAmount) || 0;
-      await insertAdvance({
-        month_id: selectedMonthId,
-        assigned_to: currentPartner,
-        amount,
-        label: advLabel
-      });
+      if (advanceToEdit) {
+        await updateAdvance({
+          ...advanceToEdit,
+          amount,
+          label: advLabel
+        });
+        addNotification(`Avance "${advLabel}" modifiée`);
+      } else {
+        await insertAdvance({
+          month_id: selectedMonthId,
+          assigned_to: currentPartner,
+          amount,
+          label: advLabel
+        });
+        addNotification(`Avance "${advLabel}" ajoutée`);
+      }
       setAdvLabel('');
       setAdvAmount('');
+      setAdvanceToEdit(null);
       setShowAddAdvanceModal(false);
     } catch (err) {
       console.error(err);
@@ -479,6 +492,13 @@ export default function App() {
     } catch (err) {
       console.error(err);
     }
+  };
+
+  const openEditAdvance = (adv: AdvanceType) => {
+    setAdvanceToEdit(adv);
+    setAdvLabel(adv.label);
+    setAdvAmount(adv.amount.toString());
+    setShowAddAdvanceModal(true);
   };
 
   // --- ACTIONS CATÉGORIES ---
@@ -1296,12 +1316,17 @@ export default function App() {
                         <div style={{ fontWeight: '600' }}>{adv.label}</div>
                         <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>Avancé par : {getPartnerName(adv.assigned_to)}</div>
                       </div>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                        <span style={{ fontWeight: '700' }}>{adv.amount.toFixed(2)} €</span>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                        <span style={{ fontWeight: '700', marginRight: '4px' }}>{adv.amount.toFixed(2)} €</span>
                         {(selectedMonth.status === 'draft' || selectedMonth.status === 'reopened') && (
-                          <button className="btn-icon delete" onClick={() => handleDeleteAdvance(adv.id!, adv.label)}>
-                            <Trash2 size={12} />
-                          </button>
+                          <div className="actions-row">
+                            <button className="btn-icon" onClick={() => openEditAdvance(adv)}>
+                              <Edit2 size={12} />
+                            </button>
+                            <button className="btn-icon delete" onClick={() => handleDeleteAdvance(adv.id!, adv.label)}>
+                              <Trash2 size={12} />
+                            </button>
+                          </div>
                         )}
                       </div>
                     </div>
@@ -1893,15 +1918,15 @@ export default function App() {
         </div>
       )}
 
-      {/* 2. Modal Ajouter Avance */}
+      {/* 2. Modal Ajouter/Modifier Avance */}
       {showAddAdvanceModal && (
-        <div className="modal-overlay" onClick={() => setShowAddAdvanceModal(false)}>
+        <div className="modal-overlay" onClick={() => { setShowAddAdvanceModal(false); setAdvanceToEdit(null); }}>
           <div className="modal-content animate-fade-in" onClick={e => e.stopPropagation()}>
             <div className="modal-header">
-              <h3 className="modal-title">Déclarer un paiement / avance</h3>
+              <h3 className="modal-title">{advanceToEdit ? "Modifier le paiement / avance" : "Déclarer un paiement / avance"}</h3>
             </div>
             <p style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
-              Déclarez un achat ou paiement fait directement par {getPartnerName(currentPartner)} ce mois-ci.
+              Déclarez un achat ou paiement fait directement par {getPartnerName(advanceToEdit ? advanceToEdit.assigned_to : currentPartner)} ce mois-ci.
             </p>
 
             <div className="form-group">
@@ -1927,7 +1952,7 @@ export default function App() {
             </div>
 
             <div style={{ display: 'flex', gap: '10px', marginTop: '10px' }}>
-              <button className="btn-secondary" onClick={() => setShowAddAdvanceModal(false)}>Annuler</button>
+              <button className="btn-secondary" onClick={() => { setShowAddAdvanceModal(false); setAdvanceToEdit(null); }}>Annuler</button>
               <button className="btn-primary" onClick={handleSaveAdvance}>Enregistrer</button>
             </div>
           </div>

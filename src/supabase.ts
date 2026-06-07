@@ -269,6 +269,21 @@ export async function deleteAdvance(id: string): Promise<void> {
   if (error) throw error;
 }
 
+export async function updateAdvance(adv: Advance): Promise<Advance> {
+  const { data, error } = await supabase
+    .from('advances')
+    .update({
+      amount: adv.amount,
+      label: adv.label,
+      assigned_to: adv.assigned_to,
+    })
+    .eq('id', adv.id)
+    .select()
+    .single();
+  if (error) throw error;
+  return data;
+}
+
 // 6. Templates
 export async function getTemplates(householdId: string): Promise<Template[]> {
   const { data, error } = await supabase
