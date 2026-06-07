@@ -95,15 +95,36 @@ on conflict (id) do update set
 -- ==========================================
 -- ACTIVATION DE SUPABASE REALTIME (TEMPS RÉEL)
 -- ==========================================
-begin;
-  -- Supprimer les tables de la publication si déjà existantes pour éviter des erreurs
-  alter publication supabase_realtime drop table if exists households, months, categories, charges, advances, templates;
-  
-  -- Ajouter les tables à la publication temps réel
-  alter publication supabase_realtime add table households;
-  alter publication supabase_realtime add table months;
-  alter publication supabase_realtime add table categories;
-  alter publication supabase_realtime add table charges;
-  alter publication supabase_realtime add table advances;
-  alter publication supabase_realtime add table templates;
-commit;
+do $$
+begin
+  begin
+    alter publication supabase_realtime add table households;
+  exception when others then null;
+  end;
+
+  begin
+    alter publication supabase_realtime add table months;
+  exception when others then null;
+  end;
+
+  begin
+    alter publication supabase_realtime add table categories;
+  exception when others then null;
+  end;
+
+  begin
+    alter publication supabase_realtime add table charges;
+  exception when others then null;
+  end;
+
+  begin
+    alter publication supabase_realtime add table advances;
+  exception when others then null;
+  end;
+
+  begin
+    alter publication supabase_realtime add table templates;
+  exception when others then null;
+  end;
+end;
+$$;
