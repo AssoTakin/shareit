@@ -648,6 +648,23 @@ export default function App() {
   };
 
   // --- ACTIONS SETTINGS ---
+  const handleRenameHousehold = async (newName: string) => {
+    if (!household) return;
+    try {
+      const updated = {
+        ...household,
+        name: newName
+      };
+      await updateHousehold(updated);
+      setHousehold(updated);
+      setSettingsFoyerName(newName);
+      addNotification(`Foyer renommé en "${newName}"`);
+    } catch (err) {
+      console.error(err);
+      alert("Erreur lors du renommage : " + err);
+    }
+  };
+
   const handleSaveSettings = async () => {
     if (!household) return;
     try {
@@ -1203,7 +1220,22 @@ export default function App() {
                 <h1 style={{ fontSize: '24px', fontWeight: '800', color: 'var(--primary)' }}>
                   {frenchMonthName(selectedMonth.month).toUpperCase()} {selectedMonth.year}
                 </h1>
-                <p style={{ fontSize: '13px', color: 'var(--text-muted)' }}>Foyer : {household.name}</p>
+                <p style={{ fontSize: '13px', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <span>Foyer : <strong>{household.name}</strong></span>
+                  <button 
+                    className="btn-icon" 
+                    style={{ width: '18px', height: '18px', padding: 0 }}
+                    onClick={() => {
+                      const newName = window.prompt("Entrez le nouveau nom de votre foyer :", household.name);
+                      if (newName && newName.trim()) {
+                        handleRenameHousehold(newName.trim());
+                      }
+                    }}
+                    title="Renommer le foyer"
+                  >
+                    <Edit2 size={10} />
+                  </button>
+                </p>
               </div>
 
               {/* Statut & Actions Clôture */}
