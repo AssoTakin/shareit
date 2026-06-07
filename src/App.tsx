@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import {
   ListCollapse,
   Calendar as CalendarIcon,
@@ -57,6 +57,12 @@ export default function App() {
   const isConfigured = isSupabaseConfigured();
   const [householdId, setHouseholdId] = useState<string | null>(localStorage.getItem('share_it_household_id'));
   const [household, setHousehold] = useState<HouseholdType | null>(null);
+
+  // Refs de suivi pour éviter les doublons et confusions de notifications
+  const deletedChargesByMeRef = useRef<string[]>([]);
+  const deletedAdvancesByMeRef = useRef<string[]>([]);
+  const householdUpdatedByMeRef = useRef<boolean>(false);
+  const monthStatusUpdatedByMeRef = useRef<string | null>(null);
   
   // Navigation & Simulation
   const [activeTab, setActiveTab] = useState<'dashboard' | 'history' | 'charts' | 'settings'>('dashboard');
@@ -254,36 +260,79 @@ export default function App() {
         'postgres_changes',
         { event: '*', schema: 'public' },
         (payload: any) => {
-          // Gestion des différents types de tables modifiées en ligne
           const table = payload.table;
           const eventType = payload.eventType; // 'INSERT', 'UPDATE', 'DELETE'
 
-          // Détecter qui a fait la modif (si c'est le partenaire ou nous-même)
-          // Pour la démo, on simule l'apparition d'un indicateur de saisie "Typing..."
-          const actionUser = currentPartner === 'partner1' ? 'partner2' : 'partner1';
-          const partnerName = getPartnerName(actionUser);
+          const partnerKey = currentPartner === 'partner1' ? 'partner2' : 'partner1';
+          const partnerName = getPartnerName(partnerKey);
 
           if (table === 'charges') {
             if (selectedMonthId) getCharges(selectedMonthId).then(setCharges);
             if (eventType === 'INSERT') {
-              triggerTypingSimulation(`${partnerName} a ajouté une charge : "${payload.new.label}"`);
+              const actor = payload.new.added_by;
+              if (actor !== currentPartner) {
+                const actorName = getPartnerName(actor);
+                triggerTypingSimulation(`${actorName} a ajouté une charge : "${payload.new.label}"`);
+              }
             } else if (eventType === 'UPDATE') {
-              triggerTypingSimulation(`${partnerName} a modifié une charge : "${payload.new.label}"`);
+              const isValidation = payload.old && payload.new.is_validated === true && payload.old.is_validated === false;
+              if (isValidation) {
+                const actor = payload.new.added_by;
+                if (actor !== currentPartner) {
+                  const actorName = getPartnerName(actor);
+                  addNotification(`${actorName} a validé la charge reconduite : "${payload.new.label}"`);
+                }
+              } else {
+                const actor = payload.new.modified_by || payload.new.added_by;
+                if (actor !== currentPartner) {
+                  const actorName = getPartnerName(actor);
+                  triggerTypingSimulation(`${actorName} a modifié une charge : "${payload.new.label}"`);
+                }
+              }
+            } else if (eventType === 'DELETE') {
+              if (deletedChargesByMeRef.current.includes(payload.old.id)) {
+                // Clear from ref, do not notify since already notified locally
+                deletedChargesByMeRef.current = deletedChargesByMeRef.current.filter(id => id !== payload.old.id);
+              } else {
+                // Modified/deleted by the partner
+                addNotification(`${partnerName} a supprimé la charge : "${payload.old.label}"`);
+              }
             }
           } else if (table === 'advances') {
             if (selectedMonthId) getAdvances(selectedMonthId).then(setAdvances);
-            if (eventType === 'INSERT') addNotification(`${partnerName} a avancé ${payload.new.amount} € pour "${payload.new.label}"`);
+            if (eventType === 'INSERT') {
+              const actor = payload.new.assigned_to;
+              if (actor !== currentPartner) {
+                addNotification(`${partnerName} a avancé ${payload.new.amount} € pour "${payload.new.label}"`);
+              }
+            } else if (eventType === 'UPDATE') {
+              const actor = payload.new.modified_by || payload.new.assigned_to;
+              if (actor !== currentPartner) {
+                addNotification(`${partnerName} a mis à jour le paiement direct : "${payload.new.label}"`);
+              }
+            } else if (eventType === 'DELETE') {
+              if (deletedAdvancesByMeRef.current.includes(payload.old.id)) {
+                deletedAdvancesByMeRef.current = deletedAdvancesByMeRef.current.filter(id => id !== payload.old.id);
+              } else {
+                addNotification(`${partnerName} a supprimé le paiement direct : "${payload.old.label}"`);
+              }
+            }
           } else if (table === 'months') {
             getMonths(householdId).then(setMonths);
             if (eventType === 'UPDATE') {
               const oldMonth = months.find(m => m.id === payload.new.id);
               if (oldMonth && oldMonth.status !== payload.new.status) {
                 if (payload.new.status === 'pending_close') {
-                  addNotification(`${getPartnerName(payload.new.close_requested_by)} demande la clôture du mois`);
+                  if (payload.new.close_requested_by !== currentPartner) {
+                    addNotification(`${getPartnerName(payload.new.close_requested_by)} demande la clôture du mois`);
+                  }
                 } else if (payload.new.status === 'closed') {
                   addNotification(`Mois clôturé et verrouillé ✅`);
                 } else if (payload.new.status === 'reopened') {
-                  addNotification(`Le mois a été réouvert`);
+                  if (monthStatusUpdatedByMeRef.current !== 'reopened') {
+                    addNotification(`Le mois a été réouvert par votre partenaire`);
+                  }
+                  monthStatusUpdatedByMeRef.current = null;
                 }
               }
             }
@@ -293,6 +342,13 @@ export default function App() {
             getTemplates(householdId).then(setTemplates);
           } else if (table === 'households') {
             getHousehold(householdId).then(setHousehold);
+            if (eventType === 'UPDATE') {
+              if (householdUpdatedByMeRef.current) {
+                householdUpdatedByMeRef.current = false;
+              } else {
+                addNotification(`Le nom du foyer a été mis à jour : "${payload.new.name}"`);
+              }
+            }
           }
         }
       )
@@ -452,7 +508,7 @@ export default function App() {
           modified_by,
           is_validated
         });
-        addNotification(`Charge "${chargeLabel}" modifiée`);
+        addNotification(`Votre modification a bien été prise en compte ("${chargeLabel}")`);
       } else {
         await insertCharge({
           month_id: selectedMonthId,
@@ -465,7 +521,7 @@ export default function App() {
           modified_by: null,
           is_validated: true
         });
-        addNotification(`Charge "${chargeLabel}" ajoutée`);
+        addNotification(`Votre saisie a bien été prise en compte ("${chargeLabel}")`);
       }
       
       // Reset & Close
@@ -482,8 +538,9 @@ export default function App() {
   const handleDeleteCharge = async (id: string, label: string) => {
     if (!window.confirm(`Voulez-vous vraiment supprimer la charge "${label}" ?`)) return;
     try {
+      deletedChargesByMeRef.current.push(id);
       await deleteCharge(id);
-      addNotification(`Charge "${label}" supprimée`);
+      addNotification(`Votre suppression a bien été prise en compte ("${label}")`);
     } catch (err) {
       console.error(err);
     }
@@ -498,7 +555,7 @@ export default function App() {
         added_by: currentPartner!,
         modified_by: null
       });
-      addNotification(`Charge "${charge.label}" validée`);
+      addNotification(`Votre validation a bien été prise en compte ("${charge.label}")`);
     } catch (err) {
       console.error(err);
     }
@@ -545,7 +602,7 @@ export default function App() {
           label: advLabel,
           modified_by
         });
-        addNotification(`Avance "${advLabel}" modifiée`);
+        addNotification(`Votre modification a bien été prise en compte ("${advLabel}")`);
       } else {
         await insertAdvance({
           month_id: selectedMonthId,
@@ -554,7 +611,7 @@ export default function App() {
           label: advLabel,
           modified_by: null
         });
-        addNotification(`Avance "${advLabel}" ajoutée`);
+        addNotification(`Votre saisie a bien été prise en compte ("${advLabel}")`);
       }
       setAdvLabel('');
       setAdvAmount('');
@@ -567,8 +624,9 @@ export default function App() {
 
   const handleDeleteAdvance = async (id: string, label: string) => {
     try {
+      deletedAdvancesByMeRef.current.push(id);
       await deleteAdvance(id);
-      addNotification(`Avance "${label}" supprimée`);
+      addNotification(`Votre suppression a bien été prise en compte ("${label}")`);
     } catch (err) {
       console.error(err);
     }
@@ -707,9 +765,10 @@ export default function App() {
         close_requested_by: null,
         close_requested_at: null
       };
+      monthStatusUpdatedByMeRef.current = 'reopened';
       await updateMonth(updated);
       setSelectedMonth(updated);
-      addNotification("Mois réouvert");
+      addNotification("Votre demande de réouverture a bien été prise en compte");
     } catch (err) {
       console.error(err);
     }
@@ -723,10 +782,11 @@ export default function App() {
         ...household,
         name: newName
       };
+      householdUpdatedByMeRef.current = true;
       await updateHousehold(updated);
       setHousehold(updated);
       setSettingsFoyerName(newName);
-      addNotification(`Foyer renommé en "${newName}"`);
+      addNotification(`Votre modification du nom du foyer a bien été prise en compte ("${newName}")`);
     } catch (err) {
       console.error(err);
       alert("Erreur lors du renommage : " + err);
