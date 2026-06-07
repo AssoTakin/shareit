@@ -303,12 +303,14 @@ export default function App() {
             if (eventType === 'INSERT') {
               const actor = payload.new.assigned_to;
               if (actor !== currentPartner) {
-                addNotification(`${partnerName} a avancé ${payload.new.amount} € pour "${payload.new.label}"`);
+                const actorName = getPartnerName(actor);
+                addNotification(`${actorName} a avancé ${payload.new.amount} € pour "${payload.new.label}"`);
               }
             } else if (eventType === 'UPDATE') {
               const actor = payload.new.modified_by || payload.new.assigned_to;
               if (actor !== currentPartner) {
-                addNotification(`${partnerName} a mis à jour le paiement direct : "${payload.new.label}"`);
+                const actorName = getPartnerName(actor);
+                addNotification(`${actorName} a mis à jour le paiement direct : "${payload.new.label}"`);
               }
             } else if (eventType === 'DELETE') {
               if (deletedAdvancesByMeRef.current.includes(payload.old.id)) {
@@ -333,6 +335,10 @@ export default function App() {
                     addNotification(`Le mois a été réouvert par votre partenaire`);
                   }
                   monthStatusUpdatedByMeRef.current = null;
+                } else if (payload.new.status === 'draft' && oldMonth.status === 'pending_close') {
+                  if (oldMonth.close_requested_by === currentPartner) {
+                    addNotification(`La proposition de clôture a été refusée par votre partenaire`);
+                  }
                 }
               }
             }
@@ -479,7 +485,7 @@ export default function App() {
     try {
       const amount = parseFloat(chargeAmount) || 0;
       if (chargeToEdit) {
-        let modified_by = chargeToEdit.modified_by;
+        let modified_by = null;
         let added_by = chargeToEdit.added_by;
         let is_validated = chargeToEdit.is_validated;
 
@@ -488,12 +494,10 @@ export default function App() {
           added_by = currentPartner!;
           modified_by = null;
         } else {
-          if (amount !== chargeToEdit.amount) {
-            if (currentPartner !== chargeToEdit.added_by) {
-              modified_by = currentPartner;
-            } else {
-              modified_by = null;
-            }
+          if (currentPartner !== chargeToEdit.added_by) {
+            modified_by = currentPartner;
+          } else {
+            modified_by = null;
           }
         }
 
@@ -587,13 +591,11 @@ export default function App() {
     try {
       const amount = parseFloat(advAmount) || 0;
       if (advanceToEdit) {
-        let modified_by = advanceToEdit.modified_by;
-        if (amount !== advanceToEdit.amount) {
-          if (currentPartner !== advanceToEdit.assigned_to) {
-            modified_by = currentPartner;
-          } else {
-            modified_by = null;
-          }
+        let modified_by = null;
+        if (currentPartner !== advanceToEdit.assigned_to) {
+          modified_by = currentPartner;
+        } else {
+          modified_by = null;
         }
 
         await updateAdvance({
@@ -1641,13 +1643,13 @@ export default function App() {
               <div style={{ borderBottom: '1px solid var(--border)', margin: '4px 0' }} />
               <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px' }}>
                 <span>Avance à déduire {p1Name} :</span>
-                <span style={{ fontWeight: '800', color: calculations.avanceDeduireSam >= 0 ? 'var(--success)' : 'var(--error)' }}>
+                <span style={{ fontWeight: '800', color: calculations.avanceDeduireSam >= 0 ? 'var(--error)' : 'var(--success)' }}>
                   {calculations.avanceDeduireSam >= 0 ? '+' : ''}{calculations.avanceDeduireSam.toFixed(2)} €
                 </span>
               </div>
               <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px' }}>
                 <span>Avance à déduire {p2Name} :</span>
-                <span style={{ fontWeight: '800', color: calculations.avanceDeduireAurelie >= 0 ? 'var(--success)' : 'var(--error)' }}>
+                <span style={{ fontWeight: '800', color: calculations.avanceDeduireAurelie >= 0 ? 'var(--error)' : 'var(--success)' }}>
                   {calculations.avanceDeduireAurelie >= 0 ? '+' : ''}{calculations.avanceDeduireAurelie.toFixed(2)} €
                 </span>
               </div>
@@ -1670,7 +1672,7 @@ export default function App() {
                 </div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', marginBottom: '3px' }}>
                   <span>Avance à déduire (Rééquilibrage) :</span>
-                  <span style={{ fontWeight: '600', color: activeAvance >= 0 ? 'var(--success)' : 'var(--error)' }}>
+                  <span style={{ fontWeight: '600', color: activeAvance >= 0 ? 'var(--error)' : 'var(--success)' }}>
                     {activeAvance >= 0 ? '+' : ''}{activeAvance.toFixed(2)} €
                   </span>
                 </div>
@@ -1699,7 +1701,7 @@ export default function App() {
                 </div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', marginBottom: '3px' }}>
                   <span>Avance à déduire (Rééquilibrage) :</span>
-                  <span style={{ fontWeight: '600', color: otherAvance >= 0 ? 'var(--success)' : 'var(--error)' }}>
+                  <span style={{ fontWeight: '600', color: otherAvance >= 0 ? 'var(--error)' : 'var(--success)' }}>
                     {otherAvance >= 0 ? '+' : ''}{otherAvance.toFixed(2)} €
                   </span>
                 </div>
