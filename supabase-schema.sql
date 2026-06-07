@@ -86,7 +86,7 @@ create index if not exists idx_templates_household on templates(household_id);
 insert into categories (id, household_id, name, display_order, is_default)
 values 
   ('basiques', null, 'Charges basiques', 10, true),
-  ('maia', null, 'Charges Enfant (Maïa)', 20, true),
+  ('maia', null, 'Charges Enfant', 20, true),
   ('autres', null, 'Autres charges', 30, true)
 on conflict (id) do update set 
   name = excluded.name, 
