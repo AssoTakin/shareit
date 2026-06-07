@@ -49,6 +49,7 @@ create table if not exists charges (
   split_method text not null, -- 'proportional', '50_50', 'user1_only', 'user2_only'
   is_recurring boolean default false not null,
   added_by text not null, -- 'partner1' or 'partner2'
+  modified_by text, -- 'partner1' or 'partner2' (indique qui a modifié le montant en dernier si différent du créateur)
   created_at timestamp with time zone default timezone('utc'::text, now()) not null,
   updated_at timestamp with time zone default timezone('utc'::text, now()) not null
 );
@@ -60,6 +61,7 @@ create table if not exists advances (
   assigned_to text not null, -- 'partner1' or 'partner2' (qui a avancé l'argent)
   amount numeric not null,
   label text not null,
+  modified_by text, -- 'partner1' or 'partner2' (indique qui a modifié le montant en dernier si différent de l'auteur)
   created_at timestamp with time zone default timezone('utc'::text, now()) not null
 );
 

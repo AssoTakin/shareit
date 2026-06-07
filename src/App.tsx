@@ -392,13 +392,23 @@ export default function App() {
     try {
       const amount = parseFloat(chargeAmount) || 0;
       if (chargeToEdit) {
+        let modified_by = chargeToEdit.modified_by;
+        if (amount !== chargeToEdit.amount) {
+          if (currentPartner !== chargeToEdit.added_by) {
+            modified_by = currentPartner;
+          } else {
+            modified_by = null;
+          }
+        }
+
         await updateCharge({
           ...chargeToEdit,
           label: chargeLabel,
           amount,
           category_id: chargeCat,
           split_method: chargeSplit,
-          is_recurring: chargeRecurring
+          is_recurring: chargeRecurring,
+          modified_by
         });
         addNotification(`Charge "${chargeLabel}" modifiée`);
       } else {
@@ -409,7 +419,8 @@ export default function App() {
           amount,
           split_method: chargeSplit,
           is_recurring: chargeRecurring,
-          added_by: currentPartner
+          added_by: currentPartner,
+          modified_by: null
         });
         addNotification(`Charge "${chargeLabel}" ajoutée`);
       }
@@ -461,10 +472,20 @@ export default function App() {
     try {
       const amount = parseFloat(advAmount) || 0;
       if (advanceToEdit) {
+        let modified_by = advanceToEdit.modified_by;
+        if (amount !== advanceToEdit.amount) {
+          if (currentPartner !== advanceToEdit.assigned_to) {
+            modified_by = currentPartner;
+          } else {
+            modified_by = null;
+          }
+        }
+
         await updateAdvance({
           ...advanceToEdit,
           amount,
-          label: advLabel
+          label: advLabel,
+          modified_by
         });
         addNotification(`Avance "${advLabel}" modifiée`);
       } else {
@@ -472,7 +493,8 @@ export default function App() {
           month_id: selectedMonthId,
           assigned_to: currentPartner,
           amount,
-          label: advLabel
+          label: advLabel,
+          modified_by: null
         });
         addNotification(`Avance "${advLabel}" ajoutée`);
       }
@@ -1266,7 +1288,10 @@ export default function App() {
                             {charge.is_recurring && <RefreshCw size={10} style={{ color: 'var(--primary)' }} />}
                           </div>
                           <div className="charge-meta">
-                            Payé par : {getPartnerName(charge.added_by)} • Clé : {
+                            Saisi par : {getPartnerName(charge.added_by)}
+                            {charge.modified_by && ` • Modifié par : ${getPartnerName(charge.modified_by)}`}
+                            {` • Clé : `}
+                            {
                               charge.split_method === 'proportional' ? 'Prorata' :
                               charge.split_method === '50_50' ? '50/50' :
                               charge.split_method === 'user1_only' ? `100% ${p1Name}` : `100% ${p2Name}`
@@ -1349,7 +1374,10 @@ export default function App() {
                     <div key={adv.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '13px' }}>
                       <div>
                         <div style={{ fontWeight: '600' }}>{adv.label}</div>
-                        <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>Avancé par : {getPartnerName(adv.assigned_to)}</div>
+                        <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
+                          Saisi par : {getPartnerName(adv.assigned_to)}
+                          {adv.modified_by && ` • Modifié par : ${getPartnerName(adv.modified_by)}`}
+                        </div>
                       </div>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
                         <span style={{ fontWeight: '700', marginRight: '4px' }}>{adv.amount.toFixed(2)} €</span>

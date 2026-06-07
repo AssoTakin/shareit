@@ -48,6 +48,7 @@ export interface Charge {
   split_method: string; // 'proportional', '50_50', 'user1_only', 'user2_only'
   is_recurring: boolean;
   added_by: string; // 'partner1' or 'partner2'
+  modified_by?: string | null;
   created_at?: string;
   updated_at?: string;
 }
@@ -58,6 +59,7 @@ export interface Advance {
   assigned_to: string; // 'partner1' or 'partner2'
   amount: number;
   label: string;
+  modified_by?: string | null;
   created_at?: string;
 }
 
@@ -229,6 +231,7 @@ export async function updateCharge(charge: Charge): Promise<Charge> {
       category_id: charge.category_id,
       split_method: charge.split_method,
       is_recurring: charge.is_recurring,
+      modified_by: charge.modified_by,
       updated_at: new Date().toISOString(),
     })
     .eq('id', charge.id)
@@ -276,6 +279,7 @@ export async function updateAdvance(adv: Advance): Promise<Advance> {
       amount: adv.amount,
       label: adv.label,
       assigned_to: adv.assigned_to,
+      modified_by: adv.modified_by,
     })
     .eq('id', adv.id)
     .select()
