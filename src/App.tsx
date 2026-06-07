@@ -757,6 +757,10 @@ export default function App() {
       totalPaid2: 0,
       balance1: 0,
       balance2: 0,
+      totalAutresSam: 0,
+      totalAutresAurelie: 0,
+      avanceDeduireSam: 0,
+      avanceDeduireAurelie: 0,
       virementSam: 0,
       virementAurelie: 0,
       catDetails: {} as Record<string, { total: number; due1: number; due2: number }>
@@ -840,6 +844,31 @@ export default function App() {
       }
     });
 
+    // Somme des charges et avances de la catégorie 'autres'
+    let autresPaid1 = 0;
+    let postgresAutresPaid2 = 0; // Avoid shadowing or naming issues, let's keep it simple
+    charges.forEach(c => {
+      if (c.category_id === 'autres') {
+        if (c.added_by === 'partner1') {
+          autresPaid1 += c.amount;
+        } else {
+          postgresAutresPaid2 += c.amount;
+        }
+      }
+    });
+
+    const totalAutresSam = autresPaid1 + manualAdv1;
+    const totalAutresAurelie = postgresAutresPaid2 + manualAdv2;
+
+    const avanceDeduireSam = (totalAutresAurelie - totalAutresSam) / 2;
+    const avanceDeduireAurelie = (totalAutresSam - totalAutresAurelie) / 2;
+
+    // Calcul final des virements au compte commun
+    // TOTAL À VIRER = ARRONDI.SUP(Total charges + Avance, 2) − Total autres
+    // Total charges est représenté par totalDue1 et totalDue2 (la somme de toutes les parts de charges de chaque personne)
+    const virementSam = Math.ceil((totalDue1 + avanceDeduireSam) * 100) / 100 - totalAutresSam;
+    const virementAurelie = Math.ceil((totalDue2 + avanceDeduireAurelie) * 100) / 100 - totalAutresAurelie;
+
     const totalPaid1 = directPaid1 + manualAdv1;
     const totalPaid2 = directPaid2 + manualAdv2;
 
@@ -856,8 +885,12 @@ export default function App() {
       totalPaid2,
       balance1,
       balance2,
-      virementSam: totalDue1 - totalPaid1,
-      virementAurelie: totalDue2 - totalPaid2,
+      totalAutresSam,
+      totalAutresAurelie,
+      avanceDeduireSam,
+      avanceDeduireAurelie,
+      virementSam,
+      virementAurelie,
       catDetails
     };
   }, [selectedMonth, charges, advances, categories]);
@@ -1014,12 +1047,14 @@ export default function App() {
 
   const activeName = currentPartner === 'partner1' ? p1Name : p2Name;
   const activeDue = currentPartner === 'partner1' ? calculations.totalDue1 : calculations.totalDue2;
-  const activePaid = currentPartner === 'partner1' ? calculations.totalPaid1 : calculations.totalPaid2;
+  const activeAvance = currentPartner === 'partner1' ? calculations.avanceDeduireSam : calculations.avanceDeduireAurelie;
+  const activeAutres = currentPartner === 'partner1' ? calculations.totalAutresSam : calculations.totalAutresAurelie;
   const activeVirement = currentPartner === 'partner1' ? calculations.virementSam : calculations.virementAurelie;
 
   const otherName = currentPartner === 'partner1' ? p2Name : p1Name;
   const otherDue = currentPartner === 'partner1' ? calculations.totalDue2 : calculations.totalDue1;
-  const otherPaid = currentPartner === 'partner1' ? calculations.totalPaid2 : calculations.totalPaid1;
+  const otherAvance = currentPartner === 'partner1' ? calculations.avanceDeduireAurelie : calculations.avanceDeduireSam;
+  const otherAutres = currentPartner === 'partner1' ? calculations.totalAutresAurelie : calculations.totalAutresSam;
   const otherVirement = currentPartner === 'partner1' ? calculations.virementAurelie : calculations.virementSam;
 
   return (
@@ -1336,15 +1371,15 @@ export default function App() {
 
               <div style={{ borderBottom: '1px solid var(--border)', margin: '4px 0' }} />
               <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px' }}>
-                <span>Solde des avances {p1Name} :</span>
-                <span style={{ fontWeight: '800', color: calculations.balance1 >= 0 ? 'var(--success)' : 'var(--error)' }}>
-                  {calculations.balance1 >= 0 ? '+' : ''}{calculations.balance1.toFixed(2)} €
+                <span>Avance à déduire {p1Name} :</span>
+                <span style={{ fontWeight: '800', color: calculations.avanceDeduireSam >= 0 ? 'var(--success)' : 'var(--error)' }}>
+                  {calculations.avanceDeduireSam >= 0 ? '+' : ''}{calculations.avanceDeduireSam.toFixed(2)} €
                 </span>
               </div>
               <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px' }}>
-                <span>Solde des avances {p2Name} :</span>
-                <span style={{ fontWeight: '800', color: calculations.balance2 >= 0 ? 'var(--success)' : 'var(--error)' }}>
-                  {calculations.balance2 >= 0 ? '+' : ''}{calculations.balance2.toFixed(2)} €
+                <span>Avance à déduire {p2Name} :</span>
+                <span style={{ fontWeight: '800', color: calculations.avanceDeduireAurelie >= 0 ? 'var(--success)' : 'var(--error)' }}>
+                  {calculations.avanceDeduireAurelie >= 0 ? '+' : ''}{calculations.avanceDeduireAurelie.toFixed(2)} €
                 </span>
               </div>
             </div>
@@ -1364,9 +1399,15 @@ export default function App() {
                   <span>Votre part des charges (Quote-part) :</span>
                   <span style={{ fontWeight: '600' }}>{activeDue.toFixed(2)} €</span>
                 </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', marginBottom: '3px' }}>
+                  <span>Avance à déduire (Rééquilibrage) :</span>
+                  <span style={{ fontWeight: '600', color: activeAvance >= 0 ? 'var(--success)' : 'var(--error)' }}>
+                    {activeAvance >= 0 ? '+' : ''}{activeAvance.toFixed(2)} €
+                  </span>
+                </div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', marginBottom: '8px' }}>
-                  <span>Vos avances à déduire :</span>
-                  <span style={{ fontWeight: '600', color: 'var(--success)' }}>-{activePaid.toFixed(2)} €</span>
+                  <span>Dépenses directes déjà payées :</span>
+                  <span style={{ fontWeight: '600', color: 'var(--success)' }}>-{activeAutres.toFixed(2)} €</span>
                 </div>
                 <div style={{ borderTop: '1px solid var(--border)', paddingTop: '8px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                   <span style={{ fontWeight: '700', fontSize: '14px' }}>
@@ -1387,9 +1428,15 @@ export default function App() {
                   <span>Part des charges de {otherName} :</span>
                   <span style={{ fontWeight: '600' }}>{otherDue.toFixed(2)} €</span>
                 </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', marginBottom: '3px' }}>
+                  <span>Avance à déduire (Rééquilibrage) :</span>
+                  <span style={{ fontWeight: '600', color: otherAvance >= 0 ? 'var(--success)' : 'var(--error)' }}>
+                    {otherAvance >= 0 ? '+' : ''}{otherAvance.toFixed(2)} €
+                  </span>
+                </div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', marginBottom: '8px' }}>
-                  <span>Avances de {otherName} à déduire :</span>
-                  <span style={{ fontWeight: '600', color: 'var(--success)' }}>-{otherPaid.toFixed(2)} €</span>
+                  <span>Dépenses directes déjà payées :</span>
+                  <span style={{ fontWeight: '600', color: 'var(--success)' }}>-{otherAutres.toFixed(2)} €</span>
                 </div>
                 <div style={{ borderTop: '1px solid var(--border)', paddingTop: '8px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                   <span style={{ fontWeight: '700', fontSize: '13px' }}>
