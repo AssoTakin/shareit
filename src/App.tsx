@@ -443,6 +443,16 @@ export default function App() {
     setShowAddChargeModal(true);
   };
 
+  const openAddChargeForCategory = (catId: string) => {
+    setChargeToEdit(null);
+    setChargeLabel('');
+    setChargeAmount('');
+    setChargeCat(catId);
+    setChargeSplit('proportional');
+    setChargeRecurring(false);
+    setShowAddChargeModal(true);
+  };
+
   // --- ACTIONS AVANCES ---
   const handleSaveAdvance = async () => {
     if (!selectedMonthId || !advLabel || !advAmount) return;
@@ -1173,7 +1183,19 @@ export default function App() {
                         </div>
                       )}
                     </div>
-                    <span style={{ fontWeight: '800' }}>{catInfo.total.toFixed(2)} €</span>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                      <span style={{ fontWeight: '800' }}>{catInfo.total.toFixed(2)} €</span>
+                      {(selectedMonth.status === 'draft' || selectedMonth.status === 'reopened') && (
+                        <button
+                          className="btn-icon"
+                          onClick={() => openAddChargeForCategory(cat.id)}
+                          title={`Ajouter une charge dans ${cat.name}`}
+                          style={{ width: '22px', height: '22px', background: 'var(--primary-light)', color: 'var(--primary)', borderRadius: 'var(--radius-sm)', padding: 0 }}
+                        >
+                          <Plus size={12} />
+                        </button>
+                      )}
+                    </div>
                   </div>
 
                   {catCharges.length === 0 ? (
