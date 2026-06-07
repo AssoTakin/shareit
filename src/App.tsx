@@ -723,10 +723,12 @@ export default function App() {
       totalCharges: 0,
       totalDue1: 0,
       totalDue2: 0,
+      totalPaid1: 0,
+      totalPaid2: 0,
       balance1: 0,
       balance2: 0,
-      wireSam: 0,
-      wireAurelie: 0,
+      virementSam: 0,
+      virementAurelie: 0,
       catDetails: {} as Record<string, { total: number; due1: number; due2: number }>
     };
 
@@ -814,19 +816,18 @@ export default function App() {
     const balance1 = totalPaid1 - totalDue1;
     const balance2 = totalPaid2 - totalDue2;
 
-    const wireSam = balance1 < 0 ? -balance1 : 0;
-    const wireAurelie = balance2 < 0 ? -balance2 : 0;
-
     return {
       ratioSam,
       ratioAurelie,
       totalCharges,
       totalDue1,
       totalDue2,
+      totalPaid1,
+      totalPaid2,
       balance1,
       balance2,
-      wireSam,
-      wireAurelie,
+      virementSam: totalDue1 - totalPaid1,
+      virementAurelie: totalDue2 - totalPaid2,
       catDetails
     };
   }, [selectedMonth, charges, advances, categories]);
@@ -980,6 +981,16 @@ export default function App() {
 
   const p1Name = household.partner1_name;
   const p2Name = household.partner2_name;
+
+  const activeName = currentPartner === 'partner1' ? p1Name : p2Name;
+  const activeDue = currentPartner === 'partner1' ? calculations.totalDue1 : calculations.totalDue2;
+  const activePaid = currentPartner === 'partner1' ? calculations.totalPaid1 : calculations.totalPaid2;
+  const activeVirement = currentPartner === 'partner1' ? calculations.virementSam : calculations.virementAurelie;
+
+  const otherName = currentPartner === 'partner1' ? p2Name : p1Name;
+  const otherDue = currentPartner === 'partner1' ? calculations.totalDue2 : calculations.totalDue1;
+  const otherPaid = currentPartner === 'partner1' ? calculations.totalPaid2 : calculations.totalPaid1;
+  const otherVirement = currentPartner === 'partner1' ? calculations.virementAurelie : calculations.virementSam;
 
   return (
     <div className="container animate-fade-in">
@@ -1291,31 +1302,57 @@ export default function App() {
               </div>
             </div>
 
-            {/* Virement final de compensation */}
-            <div className="card" style={{ background: 'var(--success-light)', borderColor: 'var(--success)' }}>
+            {/* Virements au compte commun */}
+            <div className="card" style={{ background: 'var(--success-light)', borderColor: 'var(--success)', gap: '10px' }}>
               <div style={{ fontSize: '13px', fontWeight: '800', color: 'var(--success)', textTransform: 'uppercase' }}>
-                Régularisation directe
+                Virements au compte commun
               </div>
               
-              {calculations.wireSam <= 0 && calculations.wireAurelie <= 0 ? (
-                <div style={{ fontSize: '15px', fontWeight: '700', color: 'var(--text)' }}>
-                  Comptes équilibrés ! Aucun transfert requis.
+              {/* Espace de l'utilisateur actif */}
+              <div style={{ padding: '12px', borderRadius: 'var(--radius-sm)', background: 'var(--surface)', border: '1px solid var(--border)' }}>
+                <div style={{ fontSize: '11px', color: 'var(--text-muted)', fontWeight: '700', textTransform: 'uppercase', marginBottom: '6px' }}>
+                  Votre espace ({activeName})
                 </div>
-              ) : calculations.wireSam > 0 ? (
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <span style={{ fontWeight: '600' }}>{p1Name} doit faire un virement à {p2Name}</span>
-                  <span style={{ fontSize: '18px', fontWeight: '800', color: 'var(--success)' }}>
-                    {calculations.wireSam.toFixed(2)} € ✅
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', marginBottom: '3px' }}>
+                  <span>Votre part des charges (Quote-part) :</span>
+                  <span style={{ fontWeight: '600' }}>{activeDue.toFixed(2)} €</span>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', marginBottom: '8px' }}>
+                  <span>Vos avances à déduire :</span>
+                  <span style={{ fontWeight: '600', color: 'var(--success)' }}>-{activePaid.toFixed(2)} €</span>
+                </div>
+                <div style={{ borderTop: '1px solid var(--border)', paddingTop: '8px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <span style={{ fontWeight: '700', fontSize: '14px' }}>
+                    {activeVirement >= 0 ? "Votre virement à faire :" : "Remboursement à percevoir :"}
+                  </span>
+                  <span style={{ fontSize: '18px', fontWeight: '800', color: activeVirement >= 0 ? 'var(--primary)' : 'var(--success)' }}>
+                    {Math.abs(activeVirement).toFixed(2)} € {activeVirement >= 0 ? '➡️ 🏦' : '⬅️ 🏦'}
                   </span>
                 </div>
-              ) : (
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <span style={{ fontWeight: '600' }}>{p2Name} doit faire un virement à {p1Name}</span>
-                  <span style={{ fontSize: '18px', fontWeight: '800', color: 'var(--success)' }}>
-                    {calculations.wireAurelie.toFixed(2)} € ✅
+              </div>
+
+              {/* Espace de l'autre partenaire */}
+              <div style={{ padding: '12px', borderRadius: 'var(--radius-sm)', background: 'var(--surface)', border: '1px solid var(--border)', opacity: 0.85 }}>
+                <div style={{ fontSize: '11px', color: 'var(--text-muted)', fontWeight: '700', textTransform: 'uppercase', marginBottom: '6px' }}>
+                  Espace de {otherName}
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', marginBottom: '3px' }}>
+                  <span>Part des charges de {otherName} :</span>
+                  <span style={{ fontWeight: '600' }}>{otherDue.toFixed(2)} €</span>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', marginBottom: '8px' }}>
+                  <span>Avances de {otherName} à déduire :</span>
+                  <span style={{ fontWeight: '600', color: 'var(--success)' }}>-{otherPaid.toFixed(2)} €</span>
+                </div>
+                <div style={{ borderTop: '1px solid var(--border)', paddingTop: '8px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <span style={{ fontWeight: '700', fontSize: '13px' }}>
+                    {otherVirement >= 0 ? `Virement de ${otherName} à faire :` : `Remboursement de ${otherName} :`}
+                  </span>
+                  <span style={{ fontSize: '16px', fontWeight: '800', color: otherVirement >= 0 ? 'var(--text)' : 'var(--success)' }}>
+                    {Math.abs(otherVirement).toFixed(2)} € {otherVirement >= 0 ? '➡️ 🏦' : '⬅️ 🏦'}
                   </span>
                 </div>
-              )}
+              </div>
             </div>
 
             {/* FAB d'ajout de charge */}
