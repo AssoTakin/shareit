@@ -529,3 +529,59 @@ export async function importDemoHistory(householdId: string): Promise<void> {
     if (advErr) throw advErr;
   }
 }
+
+// --- LOGS D'ACTIVITÉS (NOTIFICATIONS HORS-LIGNE) ---
+export interface ActivityLog {
+  id?: string;
+  household_id: string;
+  actor: string;
+  action_type: string; // 'create', 'update', 'delete', 'validate', 'propose_close', 'close', 'reject_close', 'reopen', 'rename_household'
+  item_type: string; // 'charge', 'advance', 'month', 'category', 'household'
+  item_label: string;
+  details?: string | null;
+  created_at?: string;
+}
+
+export async function insertActivityLog(
+  householdId: string,
+  actor: string,
+  actionType: string,
+  itemType: string,
+  itemLabel: string,
+  details?: string | null
+): Promise<void> {
+  try {
+    const { error } = await supabase.from('activity_logs').insert({
+      household_id: householdId,
+      actor,
+      action_type: actionType,
+      item_type: itemType,
+      item_label: itemLabel,
+      details: details || null
+    });
+    if (error) {
+      console.warn("Could not insert activity log (table activity_logs might not exist yet):", error.message);
+    }
+  } catch (err) {
+    console.warn("Exception during insert activity log (table activity_logs might not exist yet):", err);
+  }
+}
+
+export async function getActivityLogs(householdId: string, limit = 30): Promise<ActivityLog[]> {
+  try {
+    const { data, error } = await supabase
+      .from('activity_logs')
+      .select('*')
+      .eq('household_id', householdId)
+      .order('created_at', { ascending: false })
+      .limit(limit);
+    if (error) {
+      console.warn("Could not fetch activity logs (table activity_logs might not exist yet):", error.message);
+      return [];
+    }
+    return data || [];
+  } catch (err) {
+    console.warn("Exception during fetch activity logs (table activity_logs might not exist yet):", err);
+    return [];
+  }
+}

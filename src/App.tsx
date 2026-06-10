@@ -14,7 +14,11 @@ import {
   Copy,
   LogOut,
   ChevronRight,
-  User
+  User,
+  Bell,
+  Clock,
+  X,
+  Check
 } from 'lucide-react';
 import {
   supabase,
@@ -41,7 +45,9 @@ import {
   updateTemplate,
   deleteTemplate,
   createNewMonth,
-  importDemoHistory
+  importDemoHistory,
+  insertActivityLog,
+  getActivityLogs
 } from './supabase';
 import type {
   Household as HouseholdType,
@@ -49,7 +55,8 @@ import type {
   MonthEntity as MonthType,
   Charge as ChargeType,
   Advance as AdvanceType,
-  Template as TemplateType
+  Template as TemplateType,
+  ActivityLog
 } from './supabase';
 import './App.css';
 
@@ -83,6 +90,11 @@ export default function App() {
   const [partnerTypingText, setPartnerTypingText] = useState<string | null>(null);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+
+  // Activity / Notification States
+  const [activityLogs, setActivityLogs] = useState<ActivityLog[]>([]);
+  const [showNotificationsPanel, setShowNotificationsPanel] = useState(false);
+  const [hasUnreadNotifications, setHasUnreadNotifications] = useState(false);
 
   // Modal Control States
   const [showAddChargeModal, setShowAddChargeModal] = useState(false);
@@ -145,6 +157,78 @@ export default function App() {
     setTimeout(() => {
       setToastMessage(prev => prev === msg ? null : prev);
     }, 3000);
+  };
+
+  // Activity log helpers
+  const loadActivityLogs = async (code: string) => {
+    try {
+      const logs = await getActivityLogs(code);
+      setActivityLogs(logs);
+      
+      const lastRead = localStorage.getItem('share_it_last_read_notifications');
+      if (!lastRead) {
+        setHasUnreadNotifications(logs.length > 0);
+      } else {
+        const lastReadDate = new Date(lastRead);
+        const hasUnread = logs.some(log => log.created_at && new Date(log.created_at) > lastReadDate);
+        setHasUnreadNotifications(hasUnread);
+      }
+    } catch (err) {
+      console.warn("Could not load activity logs:", err);
+    }
+  };
+
+  const handleClearNotificationsBadge = () => {
+    localStorage.setItem('share_it_last_read_notifications', new Date().toISOString());
+    setHasUnreadNotifications(false);
+  };
+
+  useEffect(() => {
+    if (showNotificationsPanel) {
+      handleClearNotificationsBadge();
+    }
+  }, [showNotificationsPanel]);
+
+  const getActivityIcon = (actionType: string, _itemType: string) => {
+    if (actionType === 'create') return <Plus size={12} />;
+    if (actionType === 'delete') return <Trash2 size={12} style={{ color: 'var(--error)' }} />;
+    if (actionType === 'validate') return <Check size={12} style={{ color: 'var(--success)' }} />;
+    if (actionType === 'update') return <Edit2 size={12} style={{ color: 'var(--primary)' }} />;
+    if (actionType === 'propose_close') return <Clock size={12} style={{ color: 'var(--warning)' }} />;
+    if (actionType === 'close') return <CheckCircle2 size={12} style={{ color: 'var(--success)' }} />;
+    if (actionType === 'reject_close') return <X size={12} style={{ color: 'var(--error)' }} />;
+    if (actionType === 'reopen') return <RefreshCw size={12} style={{ color: 'var(--secondary)' }} />;
+    return <Bell size={12} />;
+  };
+
+  const getActivityText = (isMe: boolean, actionType: string, itemType: string, label: string) => {
+    const typeLabel = itemType === 'charge' ? 'la charge' : itemType === 'advance' ? 'le paiement direct' : itemType === 'category' ? 'la catégorie' : 'le mois';
+    if (actionType === 'create') return `${isMe ? 'avez ajouté' : 'a ajouté'} ${typeLabel} "${label}"`;
+    if (actionType === 'update') return `${isMe ? 'avez modifié' : 'a modifié'} ${typeLabel} "${label}"`;
+    if (actionType === 'delete') return `${isMe ? 'avez supprimé' : 'a supprimé'} ${typeLabel} "${label}"`;
+    if (actionType === 'validate') return `${isMe ? 'avez validé' : 'a validé'} la charge reconduite "${label}"`;
+    if (actionType === 'propose_close') return `${isMe ? 'avez proposé' : 'a proposé'} la clôture du mois`;
+    if (actionType === 'close') return `${isMe ? 'avez validé et clôturé' : 'a validé et clôturé'} le mois`;
+    if (actionType === 'reject_close') return `${isMe ? 'avez refusé' : 'a refusé'} la proposition de clôture`;
+    if (actionType === 'reopen') return `${isMe ? 'avez réouvert' : 'a réouvert'} le mois`;
+    if (actionType === 'rename_household') return `${isMe ? 'avez renommé' : 'a renommé'} le foyer en "${label}"`;
+    return `${isMe ? 'avez effectué' : 'a effectué'} une action sur "${label}"`;
+  };
+
+  const formatLogDate = (dateStr: string) => {
+    const date = new Date(dateStr);
+    const now = new Date();
+    const isToday = date.toDateString() === now.toDateString();
+    const yesterday = new Date(now);
+    yesterday.setDate(yesterday.getDate() - 1);
+    const isYesterday = date.toDateString() === yesterday.toDateString();
+    
+    const pad = (n: number) => n.toString().padStart(2, '0');
+    const timeStr = `${pad(date.getHours())}:${pad(date.getMinutes())}`;
+    
+    if (isToday) return `Aujourd'hui à ${timeStr}`;
+    if (isYesterday) return `Hier à ${timeStr}`;
+    return `${pad(date.getDate())}/${pad(date.getMonth() + 1)}/${date.getFullYear()} à ${timeStr}`;
   };
 
   // Switch Partner simulator
@@ -218,6 +302,9 @@ export default function App() {
       // Load templates
       const temps = await getTemplates(code);
       setTemplates(temps);
+
+      // Load activity logs
+      await loadActivityLogs(code);
 
     } catch (err) {
       console.error("Erreur lors du chargement des données Supabase", err);
@@ -355,6 +442,8 @@ export default function App() {
                 addNotification(`Le nom du foyer a été mis à jour : "${payload.new.name}"`);
               }
             }
+          } else if (table === 'activity_logs') {
+            loadActivityLogs(householdId);
           }
         }
       )
@@ -512,6 +601,11 @@ export default function App() {
           modified_by,
           is_validated
         });
+        if (chargeToEdit.is_validated === false) {
+          await insertActivityLog(householdId!, currentPartner!, 'validate', 'charge', chargeLabel, `${amount.toFixed(2)} €`);
+        } else {
+          await insertActivityLog(householdId!, currentPartner!, 'update', 'charge', chargeLabel, `${amount.toFixed(2)} €`);
+        }
         addNotification(`Votre modification a bien été prise en compte ("${chargeLabel}")`);
       } else {
         await insertCharge({
@@ -525,6 +619,7 @@ export default function App() {
           modified_by: null,
           is_validated: true
         });
+        await insertActivityLog(householdId!, currentPartner!, 'create', 'charge', chargeLabel, `${amount.toFixed(2)} €`);
         addNotification(`Votre saisie a bien été prise en compte ("${chargeLabel}")`);
       }
       
@@ -544,6 +639,7 @@ export default function App() {
     try {
       deletedChargesByMeRef.current.push(id);
       await deleteCharge(id);
+      await insertActivityLog(householdId!, currentPartner!, 'delete', 'charge', label);
       addNotification(`Votre suppression a bien été prise en compte ("${label}")`);
     } catch (err) {
       console.error(err);
@@ -559,6 +655,7 @@ export default function App() {
         added_by: currentPartner!,
         modified_by: null
       });
+      await insertActivityLog(householdId!, currentPartner!, 'validate', 'charge', charge.label, `${charge.amount.toFixed(2)} €`);
       addNotification(`Votre validation a bien été prise en compte ("${charge.label}")`);
     } catch (err) {
       console.error(err);
@@ -604,6 +701,7 @@ export default function App() {
           label: advLabel,
           modified_by
         });
+        await insertActivityLog(householdId!, currentPartner!, 'update', 'advance', advLabel, `${amount.toFixed(2)} €`);
         addNotification(`Votre modification a bien été prise en compte ("${advLabel}")`);
       } else {
         await insertAdvance({
@@ -613,6 +711,7 @@ export default function App() {
           label: advLabel,
           modified_by: null
         });
+        await insertActivityLog(householdId!, currentPartner!, 'create', 'advance', advLabel, `${amount.toFixed(2)} €`);
         addNotification(`Votre saisie a bien été prise en compte ("${advLabel}")`);
       }
       setAdvLabel('');
@@ -628,6 +727,7 @@ export default function App() {
     try {
       deletedAdvancesByMeRef.current.push(id);
       await deleteAdvance(id);
+      await insertActivityLog(householdId!, currentPartner!, 'delete', 'advance', label);
       addNotification(`Votre suppression a bien été prise en compte ("${label}")`);
     } catch (err) {
       console.error(err);
@@ -657,6 +757,7 @@ export default function App() {
         is_default: false
       });
       
+      await insertActivityLog(householdId!, currentPartner!, 'create', 'category', newCatName);
       setNewCatName('');
       setShowAddCategoryModal(false);
       addNotification(`Catégorie "${newCatName}" créée`);
@@ -672,6 +773,7 @@ export default function App() {
         ...categoryToRename,
         name: categoryNewName
       });
+      await insertActivityLog(householdId!, currentPartner!, 'update', 'category', categoryNewName, `Ancien : ${categoryToRename.name}`);
       setCategoryToRename(null);
       setCategoryNewName('');
       addNotification("Catégorie renommée");
@@ -695,6 +797,7 @@ export default function App() {
       }
       
       await deleteCategory(cat.id);
+      await insertActivityLog(householdId!, currentPartner!, 'delete', 'category', cat.name);
       addNotification(`Catégorie "${cat.name}" supprimée`);
     } catch (err) {
       console.error(err);
@@ -718,6 +821,7 @@ export default function App() {
       };
       await updateMonth(updated);
       setSelectedMonth(updated);
+      await insertActivityLog(householdId!, currentPartner!, 'propose_close', 'month', `${frenchMonthName(selectedMonth.month)} ${selectedMonth.year}`);
       addNotification("Proposition de clôture envoyée");
     } catch (err) {
       console.error(err);
@@ -734,6 +838,7 @@ export default function App() {
       };
       await updateMonth(updated);
       setSelectedMonth(updated);
+      await insertActivityLog(householdId!, currentPartner!, 'close', 'month', `${frenchMonthName(selectedMonth.month)} ${selectedMonth.year}`);
       addNotification("Mois clôturé et validé");
     } catch (err) {
       console.error(err);
@@ -751,6 +856,7 @@ export default function App() {
       };
       await updateMonth(updated);
       setSelectedMonth(updated);
+      await insertActivityLog(householdId!, currentPartner!, 'reject_close', 'month', `${frenchMonthName(selectedMonth.month)} ${selectedMonth.year}`);
       addNotification("Proposition de clôture refusée");
     } catch (err) {
       console.error(err);
@@ -770,6 +876,7 @@ export default function App() {
       monthStatusUpdatedByMeRef.current = 'reopened';
       await updateMonth(updated);
       setSelectedMonth(updated);
+      await insertActivityLog(householdId!, currentPartner!, 'reopen', 'month', `${frenchMonthName(selectedMonth.month)} ${selectedMonth.year}`);
       addNotification("Votre demande de réouverture a bien été prise en compte");
     } catch (err) {
       console.error(err);
@@ -788,6 +895,7 @@ export default function App() {
       await updateHousehold(updated);
       setHousehold(updated);
       setSettingsFoyerName(newName);
+      await insertActivityLog(household.id!, currentPartner!, 'rename_household', 'household', newName);
       addNotification(`Votre modification du nom du foyer a bien été prise en compte ("${newName}")`);
     } catch (err) {
       console.error(err);
@@ -870,6 +978,7 @@ export default function App() {
       setSelectedMonthId(newM.id);
       setActiveTab('dashboard');
       setShowCreateMonthModal(false);
+      await insertActivityLog(householdId, currentPartner!, 'create', 'month', `${frenchMonthName(newMonthNumber)} ${newMonthYear}`);
       
       // Reload months list
       const updated = await getMonths(householdId);
@@ -1276,12 +1385,110 @@ export default function App() {
           <span>Sync. Supabase active</span>
         </div>
         
-        {/* Indicateur de profil actif */}
-        <div className="hud-btn" style={{ cursor: 'default', background: 'transparent', borderColor: 'transparent', display: 'flex', alignItems: 'center', gap: '6px' }}>
-          <User size={14} style={{ color: 'var(--primary)' }} />
-          <span style={{ fontWeight: '600' }}>{currentPartner ? getPartnerName(currentPartner) : ''}</span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          {/* Icône de Notifications */}
+          {householdId && (
+            <button 
+              className="hud-btn" 
+              style={{ 
+                padding: '4px 8px', 
+                position: 'relative', 
+                background: 'transparent', 
+                borderColor: 'transparent',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                cursor: 'pointer'
+              }}
+              onClick={() => setShowNotificationsPanel(!showNotificationsPanel)}
+              title="Historique des activités"
+            >
+              <Bell size={16} style={{ color: showNotificationsPanel ? 'var(--primary)' : 'var(--text)' }} />
+              {hasUnreadNotifications && (
+                <span style={{
+                  position: 'absolute',
+                  top: '1px',
+                  right: '5px',
+                  width: '7px',
+                  height: '7px',
+                  background: 'var(--error)',
+                  borderRadius: '50%'
+                }} />
+              )}
+            </button>
+          )}
+
+          {/* Indicateur de profil actif */}
+          <div className="hud-btn" style={{ cursor: 'default', background: 'transparent', borderColor: 'transparent', display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <User size={14} style={{ color: 'var(--primary)' }} />
+            <span style={{ fontWeight: '600' }}>{currentPartner ? getPartnerName(currentPartner) : ''}</span>
+          </div>
         </div>
       </div>
+
+      {/* Panneau d'historique des notifications / activités */}
+      {showNotificationsPanel && (
+        <div className="card animate-fade-in" style={{
+          margin: '12px 16px',
+          padding: '16px',
+          borderRadius: 'var(--radius-lg)',
+          boxShadow: 'var(--shadow-lg)',
+          border: '1px solid var(--border)',
+          background: 'var(--surface)',
+          zIndex: 98,
+          position: 'relative',
+          maxHeight: '350px',
+          display: 'flex',
+          flexDirection: 'column',
+          gap: '12px'
+        }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid var(--border)', paddingBottom: '8px' }}>
+            <span style={{ fontWeight: '700', fontSize: '14px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <Bell size={14} style={{ color: 'var(--primary)' }} />
+              Historique des activités
+            </span>
+            <button 
+              style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', fontSize: '11px', fontWeight: '600' }}
+              onClick={handleClearNotificationsBadge}
+            >
+              Marquer comme lu
+            </button>
+          </div>
+
+          <div style={{ overflowY: 'auto', flex: 1, display: 'flex', flexDirection: 'column', gap: '10px', paddingRight: '4px' }}>
+            {activityLogs.length === 0 ? (
+              <div style={{ textAlign: 'center', color: 'var(--text-light)', fontSize: '12px', padding: '20px 0' }}>
+                Aucune activité enregistrée.
+              </div>
+            ) : (
+              activityLogs.map((log) => {
+                const isMe = log.actor === currentPartner;
+                const actorName = isMe ? "Vous" : getPartnerName(log.actor);
+                return (
+                  <div key={log.id} style={{ display: 'flex', gap: '8px', fontSize: '12px', borderBottom: '1px solid var(--border-light)', paddingBottom: '8px' }}>
+                    <div style={{ color: 'var(--primary)', marginTop: '2px', display: 'flex', alignItems: 'center' }}>
+                      {getActivityIcon(log.action_type, log.item_type)}
+                    </div>
+                    <div style={{ flex: 1 }}>
+                      <div style={{ color: 'var(--text)' }}>
+                        <strong>{actorName}</strong> {getActivityText(isMe, log.action_type, log.item_type, log.item_label)}
+                      </div>
+                      {log.details && (
+                        <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '2px', background: 'var(--background)', padding: '2px 6px', borderRadius: '4px' }}>
+                          {log.details}
+                        </div>
+                      )}
+                      <div style={{ fontSize: '10px', color: 'var(--text-light)', marginTop: '3px' }}>
+                        {formatLogDate(log.created_at || '')}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })
+            )}
+          </div>
+        </div>
+      )}
 
       {/* 2. Indicateur de frappe (simulé par websocket) */}
       {partnerTypingText && (

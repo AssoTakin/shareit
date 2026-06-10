@@ -129,5 +129,24 @@ begin
     alter publication supabase_realtime add table templates;
   exception when others then null;
   end;
+
+  begin
+    alter publication supabase_realtime add table activity_logs;
+  exception when others then null;
+  end;
 end;
 $$;
+
+-- 7. Table des logs d'activités (activity_logs) pour les notifications hors-ligne
+create table if not exists activity_logs (
+  id uuid primary key default gen_random_uuid(),
+  household_id text references households(id) on delete cascade not null,
+  actor text not null, -- 'partner1' or 'partner2'
+  action_type text not null, -- 'create', 'update', 'delete', 'validate', 'propose_close', 'close', 'reject_close', 'reopen', 'rename_household'
+  item_type text not null, -- 'charge', 'advance', 'month', 'category', 'household'
+  item_label text not null,
+  details text,
+  created_at timestamp with time zone default timezone('utc'::text, now()) not null
+);
+
+create index if not exists idx_activity_logs_household on activity_logs(household_id);
