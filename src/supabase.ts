@@ -232,6 +232,7 @@ export async function updateCharge(charge: Charge): Promise<Charge> {
       category_id: charge.category_id,
       split_method: charge.split_method,
       is_recurring: charge.is_recurring,
+      added_by: charge.added_by,
       modified_by: charge.modified_by,
       is_validated: charge.is_validated,
       updated_at: new Date().toISOString(),
