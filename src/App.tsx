@@ -691,6 +691,59 @@ export default function App() {
     }
   };
 
+  const handleConvertToAdvance = async () => {
+    if (!chargeToEdit || !chargeToEdit.id) return;
+    const amount = parseFloat(chargeAmount) || chargeToEdit.amount;
+    
+    if (!window.confirm(`Voulez-vous vraiment convertir la charge "${chargeLabel}" en avance / paiement direct ?\nCette action supprimera la charge et créera une avance du même montant.`)) return;
+
+    try {
+      const assignedTo = chargeToEdit.added_by || currentPartner!;
+
+      // 1. Insérer l'avance
+      await insertAdvance({
+        month_id: chargeToEdit.month_id,
+        assigned_to: assignedTo,
+        amount: amount,
+        label: chargeLabel,
+        modified_by: currentPartner === assignedTo ? null : currentPartner!
+      });
+
+      // 2. Supprimer la charge
+      deletedChargesByMeRef.current.push(chargeToEdit.id);
+      await deleteCharge(chargeToEdit.id);
+
+      // 3. Activité de suppression et création
+      await insertActivityLog(
+        householdId!, 
+        currentPartner!, 
+        'delete', 
+        'charge', 
+        chargeToEdit.label, 
+        `Convertie en paiement direct`
+      );
+      await insertActivityLog(
+        householdId!, 
+        currentPartner!, 
+        'create', 
+        'advance', 
+        chargeLabel, 
+        `${amount.toFixed(2)} € (Convertie)`
+      );
+
+      addNotification(`La charge "${chargeToEdit.label}" a été convertie en avance / paiement direct.`);
+
+      // Reset & Close
+      setShowAddChargeModal(false);
+      setChargeToEdit(null);
+      setChargeLabel('');
+      setChargeAmount('');
+      setChargeRecurring(false);
+    } catch (err) {
+      console.error("Erreur lors de la conversion :", err);
+    }
+  };
+
   const handleDeleteCharge = async (id: string, label: string) => {
     if (!window.confirm(`Voulez-vous vraiment supprimer la charge "${label}" ?`)) return;
     try {
@@ -2579,9 +2632,32 @@ export default function App() {
               </div>
             </div>
 
-            <div style={{ display: 'flex', gap: '10px', marginTop: '10px' }}>
-              <button className="btn-secondary" onClick={() => { setShowAddChargeModal(false); setChargeToEdit(null); }}>Annuler</button>
-              <button className="btn-primary" onClick={handleSaveCharge}>Valider</button>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginTop: '10px' }}>
+              <div style={{ display: 'flex', gap: '10px', width: '100%' }}>
+                <button className="btn-secondary" style={{ flex: 1 }} onClick={() => { setShowAddChargeModal(false); setChargeToEdit(null); }}>Annuler</button>
+                <button className="btn-primary" style={{ flex: 1 }} onClick={handleSaveCharge}>Valider</button>
+              </div>
+              {chargeToEdit && (
+                <button
+                  className="btn-secondary"
+                  onClick={handleConvertToAdvance}
+                  style={{
+                    width: '100%',
+                    borderColor: 'var(--primary)',
+                    color: 'var(--primary)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: '6px',
+                    fontSize: '13px',
+                    fontWeight: 'bold',
+                    padding: '10px 14px'
+                  }}
+                >
+                  <TrendingUp size={14} />
+                  <span>Convertir en avance / paiement direct</span>
+                </button>
+              )}
             </div>
           </div>
         </div>
