@@ -134,6 +134,11 @@ begin
     alter publication supabase_realtime add table activity_logs;
   exception when others then null;
   end;
+
+  begin
+    alter publication supabase_realtime add table charge_comments;
+  exception when others then null;
+  end;
 end;
 $$;
 
@@ -150,3 +155,14 @@ create table if not exists activity_logs (
 );
 
 create index if not exists idx_activity_logs_household on activity_logs(household_id);
+
+-- 8. Table des commentaires et questions sur les charges (charge_comments)
+create table if not exists charge_comments (
+  id uuid primary key default gen_random_uuid(),
+  charge_id uuid references charges(id) on delete cascade not null,
+  author text not null, -- 'partner1' or 'partner2'
+  content text not null,
+  created_at timestamp with time zone default timezone('utc'::text, now()) not null
+);
+
+create index if not exists idx_charge_comments_charge on charge_comments(charge_id);

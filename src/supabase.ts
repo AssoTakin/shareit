@@ -586,3 +586,49 @@ export async function getActivityLogs(householdId: string, limit = 30): Promise<
     return [];
   }
 }
+
+// --- COMMENTAIRES ET QUESTIONS SUR LES CHARGES ---
+export interface ChargeComment {
+  id?: string;
+  charge_id: string;
+  author: string; // 'partner1' or 'partner2'
+  content: string;
+  created_at?: string;
+}
+
+export async function getCommentsForCharges(chargeIds: string[]): Promise<ChargeComment[]> {
+  if (chargeIds.length === 0) return [];
+  try {
+    const { data, error } = await supabase
+      .from('charge_comments')
+      .select('*')
+      .in('charge_id', chargeIds)
+      .order('created_at', { ascending: true });
+    if (error) {
+      console.warn("Could not fetch charge comments (table charge_comments might not exist yet):", error.message);
+      return [];
+    }
+    return data || [];
+  } catch (err) {
+    console.warn("Exception during fetch charge comments (table charge_comments might not exist yet):", err);
+    return [];
+  }
+}
+
+export async function insertChargeComment(comment: ChargeComment): Promise<ChargeComment> {
+  const { data, error } = await supabase
+    .from('charge_comments')
+    .insert([comment])
+    .select()
+    .single();
+  if (error) throw error;
+  return data;
+}
+
+export async function deleteChargeComment(id: string): Promise<void> {
+  const { error } = await supabase
+    .from('charge_comments')
+    .delete()
+    .eq('id', id);
+  if (error) throw error;
+}

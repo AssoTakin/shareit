@@ -18,7 +18,8 @@ import {
   Bell,
   Clock,
   X,
-  Check
+  Check,
+  MessageSquare
 } from 'lucide-react';
 import {
   supabase,
@@ -47,7 +48,9 @@ import {
   createNewMonth,
   importDemoHistory,
   insertActivityLog,
-  getActivityLogs
+  getActivityLogs,
+  getCommentsForCharges,
+  insertChargeComment
 } from './supabase';
 import type {
   Household as HouseholdType,
@@ -56,7 +59,8 @@ import type {
   Charge as ChargeType,
   Advance as AdvanceType,
   Template as TemplateType,
-  ActivityLog
+  ActivityLog,
+  ChargeComment
 } from './supabase';
 import './App.css';
 
@@ -70,6 +74,7 @@ export default function App() {
   const deletedAdvancesByMeRef = useRef<string[]>([]);
   const householdUpdatedByMeRef = useRef<boolean>(false);
   const monthStatusUpdatedByMeRef = useRef<string | null>(null);
+  const chargesRef = useRef<ChargeType[]>([]);
   
   // Navigation & Simulation
   const [activeTab, setActiveTab] = useState<'dashboard' | 'history' | 'charts' | 'settings'>('dashboard');
@@ -110,6 +115,12 @@ export default function App() {
   
   const [showAddTemplateModal, setShowAddTemplateModal] = useState(false);
   const [showCreateMonthModal, setShowCreateMonthModal] = useState(false);
+  
+  // Comments/Questions States
+  const [comments, setComments] = useState<Record<string, ChargeComment[]>>({});
+  const [showCommentsModal, setShowCommentsModal] = useState(false);
+  const [activeChargeForComments, setActiveChargeForComments] = useState<ChargeType | null>(null);
+  const [newCommentText, setNewCommentText] = useState('');
 
   // Input states for creation/join
   const [isJoinMode, setIsJoinMode] = useState(false);
@@ -334,6 +345,37 @@ export default function App() {
     }
   }, [selectedMonthId, months]);
 
+  const loadCommentsForCharges = async (chargeList: ChargeType[]) => {
+    try {
+      const chargeIds = chargeList.map(c => c.id).filter((id): id is string => !!id);
+      if (chargeIds.length === 0) {
+        setComments({});
+        return;
+      }
+      const allComments = await getCommentsForCharges(chargeIds);
+      const grouped: Record<string, ChargeComment[]> = {};
+      allComments.forEach(comm => {
+        if (!grouped[comm.charge_id]) {
+          grouped[comm.charge_id] = [];
+        }
+        grouped[comm.charge_id].push(comm);
+      });
+      setComments(grouped);
+    } catch (err) {
+      console.warn("Erreur lors du chargement des commentaires :", err);
+    }
+  };
+
+  // Sync chargesRef and load comments on charges change
+  useEffect(() => {
+    chargesRef.current = charges;
+    if (isConfigured && charges.length > 0) {
+      loadCommentsForCharges(charges);
+    } else {
+      setComments({});
+    }
+  }, [charges, isConfigured]);
+
   // ==========================================
   // REAL-TIME SYNCHRONIZATION (SUPABASE LISTENERS)
   // ==========================================
@@ -444,6 +486,20 @@ export default function App() {
             }
           } else if (table === 'activity_logs') {
             loadActivityLogs(householdId);
+          } else if (table === 'charge_comments') {
+            if (chargesRef.current.length > 0) {
+              loadCommentsForCharges(chargesRef.current);
+            }
+            if (eventType === 'INSERT') {
+              const author = payload.new.author;
+              if (author !== currentPartner) {
+                const chargeId = payload.new.charge_id;
+                const charge = chargesRef.current.find(c => c.id === chargeId);
+                const chargeLabel = charge ? charge.label : "une charge";
+                const authorName = getPartnerName(author);
+                addNotification(`💬 ${authorName} : "${payload.new.content}" (sur "${chargeLabel}")`);
+              }
+            }
           }
         }
       )
@@ -462,7 +518,8 @@ export default function App() {
       showAddCategoryModal || 
       !!categoryToRename || 
       showAddTemplateModal || 
-      showCreateMonthModal;
+      showCreateMonthModal ||
+      showCommentsModal;
 
     if (isAnyModalOpen) {
       const timer = setTimeout(() => {
@@ -659,6 +716,60 @@ export default function App() {
       addNotification(`Votre validation a bien été prise en compte ("${charge.label}")`);
     } catch (err) {
       console.error(err);
+    }
+  };
+
+  const commentsEndRef = useRef<HTMLDivElement | null>(null);
+
+  const scrollToCommentsBottom = () => {
+    commentsEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  };
+
+  const openCommentsForCharge = (charge: ChargeType) => {
+    setActiveChargeForComments(charge);
+    setNewCommentText('');
+    setShowCommentsModal(true);
+    setTimeout(scrollToCommentsBottom, 100);
+  };
+
+  const handleSendComment = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    if (!newCommentText.trim() || !activeChargeForComments || !activeChargeForComments.id) return;
+
+    try {
+      const newComment: ChargeComment = {
+        charge_id: activeChargeForComments.id,
+        author: currentPartner!,
+        content: newCommentText.trim()
+      };
+
+      const inserted = await insertChargeComment(newComment);
+
+      // Optimistic update
+      setComments(prev => {
+        const list = prev[activeChargeForComments.id!] || [];
+        // Avoid duplicate if realtime already inserted it
+        if (list.some(c => c.id === inserted.id)) return prev;
+        return {
+          ...prev,
+          [activeChargeForComments.id!]: [...list, inserted]
+        };
+      });
+
+      // Insert Activity Log
+      await insertActivityLog(
+        householdId!,
+        currentPartner!,
+        'comment', // action type
+        'charge',
+        activeChargeForComments.label,
+        newCommentText.trim()
+      );
+
+      setNewCommentText('');
+      setTimeout(scrollToCommentsBottom, 50);
+    } catch (err) {
+      console.warn("Erreur lors de l'envoi du commentaire :", err);
     }
   };
 
@@ -1708,12 +1819,40 @@ export default function App() {
                     catCharges.map(charge => (
                       <div key={charge.id} className="table-row">
                         <div className="charge-details">
-                          <div className="charge-title">
+                          <div className="charge-title" style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
                             <span>{charge.label}</span>
-                            {charge.is_recurring && <RefreshCw size={10} style={{ color: 'var(--primary)' }} />}
+                            {charge.is_recurring && <RefreshCw size={10} style={{ color: 'var(--primary)', flexShrink: 0 }} />}
                             {charge.is_validated === false && (
-                              <span className="badge-status pending" style={{ marginLeft: '6px', fontSize: '9px', padding: '1px 6px' }}>À valider ⏳</span>
+                              <span className="badge-status pending" style={{ fontSize: '9px', padding: '1px 6px', flexShrink: 0 }}>À valider ⏳</span>
                             )}
+                            
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                openCommentsForCharge(charge);
+                              }}
+                              style={{
+                                background: 'none',
+                                border: 'none',
+                                padding: '2px 4px',
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: '3px',
+                                cursor: 'pointer',
+                                color: (comments[charge.id!] && comments[charge.id!].length > 0) ? 'var(--primary)' : 'var(--text-light)',
+                                opacity: (comments[charge.id!] && comments[charge.id!].length > 0) ? 1 : 0.4,
+                                transition: 'opacity 0.2s',
+                                borderRadius: '4px',
+                                flexShrink: 0
+                              }}
+                              className="comment-icon-btn"
+                              title="Poser une question / Voir les commentaires"
+                            >
+                              <MessageSquare size={11} />
+                              {comments[charge.id!] && comments[charge.id!].length > 0 && (
+                                <span style={{ fontSize: '9px', fontWeight: 'bold' }}>{comments[charge.id!].length}</span>
+                              )}
+                            </button>
                           </div>
                           <div className="charge-meta">
                             {charge.is_validated === false ? (
@@ -2686,6 +2825,115 @@ export default function App() {
               <button className="btn-secondary" onClick={() => setShowCreateMonthModal(false)}>Annuler</button>
               <button className="btn-primary" onClick={handleCreateNewMonth}>Créer le mois</button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* 8. Modal Commentaires et Questions sur une Charge */}
+      {showCommentsModal && activeChargeForComments && (
+        <div className="modal-overlay" onClick={() => setShowCommentsModal(false)}>
+          <div className="modal-content animate-fade-in" onClick={e => e.stopPropagation()} style={{ maxWidth: '450px', maxHeight: '85vh', display: 'flex', flexDirection: 'column', padding: '0' }}>
+            {/* En-tête */}
+            <div className="modal-header" style={{ padding: '16px 20px', borderBottom: '1px solid rgba(255,255,255,0.08)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <div>
+                <h3 className="modal-title" style={{ fontSize: '16px', fontWeight: '800', margin: '0' }}>
+                  Discussion : {activeChargeForComments.label}
+                </h3>
+                <p style={{ fontSize: '11px', color: 'var(--text-light)', margin: '4px 0 0 0' }}>
+                  Montant : {activeChargeForComments.amount.toFixed(2)} € • Saisie par : {getPartnerName(activeChargeForComments.added_by)}
+                </p>
+              </div>
+              <button 
+                onClick={() => setShowCommentsModal(false)} 
+                style={{ background: 'none', border: 'none', color: 'var(--text-light)', cursor: 'pointer', padding: '4px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            {/* Fil de discussion */}
+            <div style={{ flex: 1, overflowY: 'auto', padding: '20px', display: 'flex', flexDirection: 'column', gap: '12px', minHeight: '200px', maxHeight: '400px', background: 'rgba(0,0,0,0.15)' }}>
+              {(!comments[activeChargeForComments.id!] || comments[activeChargeForComments.id!].length === 0) ? (
+                <div style={{ margin: 'auto', textAlign: 'center', color: 'var(--text-light)', fontSize: '13px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px', padding: '20px 0', opacity: 0.7 }}>
+                  <MessageSquare size={24} style={{ opacity: 0.4 }} />
+                  <span>Aucune question ou commentaire sur cette charge.</span>
+                  <span style={{ fontSize: '11px', opacity: 0.8 }}>Posez une question ou ajoutez une précision ci-dessous !</span>
+                </div>
+              ) : (
+                comments[activeChargeForComments.id!].map((c) => {
+                  const isMe = c.author === currentPartner;
+                  const authorName = getPartnerName(c.author);
+                  return (
+                    <div 
+                      key={c.id} 
+                      style={{ 
+                        alignSelf: isMe ? 'flex-end' : 'flex-start',
+                        maxWidth: '80%',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        alignItems: isMe ? 'flex-end' : 'flex-start'
+                      }}
+                    >
+                      <div style={{ fontSize: '10px', color: 'var(--text-light)', marginBottom: '2px', fontWeight: '600' }}>
+                        {isMe ? 'Vous' : authorName}
+                      </div>
+                      <div 
+                        style={{ 
+                          background: isMe ? 'var(--primary)' : 'rgba(255,255,255,0.08)',
+                          color: 'white',
+                          padding: '10px 14px',
+                          borderRadius: isMe ? '12px 12px 2px 12px' : '12px 12px 12px 2px',
+                          fontSize: '13px',
+                          lineHeight: '1.4',
+                          boxShadow: 'var(--shadow-sm)',
+                          wordBreak: 'break-word',
+                          whiteSpace: 'pre-wrap'
+                        }}
+                      >
+                        {c.content}
+                      </div>
+                      {c.created_at && (
+                        <div style={{ fontSize: '9px', color: 'var(--text-light)', marginTop: '2px', opacity: 0.5 }}>
+                          {new Date(c.created_at).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })
+              )}
+              <div ref={commentsEndRef} />
+            </div>
+
+            {/* Saisie de message */}
+            <form 
+              onSubmit={handleSendComment} 
+              style={{ 
+                padding: '16px 20px', 
+                borderTop: '1px solid rgba(255,255,255,0.08)', 
+                display: 'flex', 
+                gap: '10px', 
+                alignItems: 'center',
+                background: 'var(--bg-card)' 
+              }}
+            >
+              <input
+                type="text"
+                className="input-field"
+                placeholder="Poser une question ou répondre..."
+                value={newCommentText}
+                onChange={e => setNewCommentText(e.target.value)}
+                style={{ flex: 1, margin: 0 }}
+                autoFocus
+              />
+              <button 
+                type="submit" 
+                className="btn-primary" 
+                style={{ width: 'auto', padding: '10px 18px', fontWeight: 'bold' }}
+                disabled={!newCommentText.trim()}
+              >
+                Envoyer
+              </button>
+            </form>
           </div>
         </div>
       )}
