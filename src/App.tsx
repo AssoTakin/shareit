@@ -1300,11 +1300,12 @@ export default function App() {
     const avanceDeduireSam = (totalAutresAurelie - totalAutresSam) / 2;
     const avanceDeduireAurelie = (totalAutresSam - totalAutresAurelie) / 2;
 
-    // Calcul final des virements au compte commun
-    // TOTAL À VIRER = ARRONDI.SUP(Total charges + Avance, 2)
-    // Total charges est représenté par totalDue1 et totalDue2 (la somme de toutes les parts de charges de chaque personne)
-    const virementSam = Math.ceil((totalDue1 + avanceDeduireSam) * 100) / 100;
-    const virementAurelie = Math.ceil((totalDue2 + avanceDeduireAurelie) * 100) / 100;
+    // Calcul final des virements au compte commun en excluant la catégorie 'autres' du compte joint
+    const autresDue1 = catDetails['autres']?.due1 || 0;
+    const autresDue2 = catDetails['autres']?.due2 || 0;
+
+    const virementSam = Math.ceil((totalDue1 - autresDue1 + avanceDeduireSam) * 100) / 100;
+    const virementAurelie = Math.ceil((totalDue2 - autresDue2 + avanceDeduireAurelie) * 100) / 100;
 
     const totalPaid1 = directPaid1 + manualAdv1;
     const totalPaid2 = directPaid2 + manualAdv2;
@@ -1530,12 +1531,16 @@ export default function App() {
   const p2Name = household.partner2_name;
 
   const activeName = currentPartner === 'partner1' ? p1Name : p2Name;
-  const activeDue = currentPartner === 'partner1' ? calculations.totalDue1 : calculations.totalDue2;
+  const activeDue = currentPartner === 'partner1' 
+    ? calculations.totalDue1 - (calculations.catDetails['autres']?.due1 || 0)
+    : calculations.totalDue2 - (calculations.catDetails['autres']?.due2 || 0);
   const activeAvance = currentPartner === 'partner1' ? calculations.avanceDeduireSam : calculations.avanceDeduireAurelie;
   const activeVirement = currentPartner === 'partner1' ? calculations.virementSam : calculations.virementAurelie;
 
   const otherName = currentPartner === 'partner1' ? p2Name : p1Name;
-  const otherDue = currentPartner === 'partner1' ? calculations.totalDue2 : calculations.totalDue1;
+  const otherDue = currentPartner === 'partner1' 
+    ? calculations.totalDue2 - (calculations.catDetails['autres']?.due2 || 0)
+    : calculations.totalDue1 - (calculations.catDetails['autres']?.due1 || 0);
   const otherAvance = currentPartner === 'partner1' ? calculations.avanceDeduireAurelie : calculations.avanceDeduireSam;
   const otherVirement = currentPartner === 'partner1' ? calculations.virementAurelie : calculations.virementSam;
 
