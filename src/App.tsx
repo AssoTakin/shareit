@@ -141,8 +141,8 @@ export default function App() {
 
   const [advLabel, setAdvLabel] = useState('');
   const [advAmount, setAdvAmount] = useState('');
-  const [ventilationCategory, setVentilationCategory] = useState('basiques');
-  const [ventilationSplitMethod, setVentilationSplitMethod] = useState('50_50');
+  const [selectedCategoryInModal, setSelectedCategoryInModal] = useState('advance');
+  const [selectedSplitMethodInModal, setSelectedSplitMethodInModal] = useState('50_50');
 
   const [sal1Input, setSal1Input] = useState('');
   const [sal2Input, setSal2Input] = useState('');
@@ -849,37 +849,99 @@ export default function App() {
   };
 
   // --- ACTIONS AVANCES ---
+  const openAddAdvance = () => {
+    setAdvanceToEdit(null);
+    setAdvLabel('');
+    setAdvAmount('');
+    setSelectedCategoryInModal('advance');
+    setSelectedSplitMethodInModal('50_50');
+    setShowAddAdvanceModal(true);
+  };
+
+  const openEditAdvance = (adv: AdvanceType) => {
+    setAdvanceToEdit(adv);
+    setAdvLabel(adv.label);
+    setAdvAmount(adv.amount.toString());
+    setSelectedCategoryInModal('advance');
+    setSelectedSplitMethodInModal('50_50');
+    setShowAddAdvanceModal(true);
+  };
+
   const handleSaveAdvance = async () => {
     if (!selectedMonthId || !advLabel || !advAmount) return;
     try {
       const amount = parseFloat(advAmount) || 0;
-      if (advanceToEdit) {
-        let modified_by = null;
-        if (currentPartner !== advanceToEdit.assigned_to) {
-          modified_by = currentPartner;
+      
+      if (selectedCategoryInModal === 'advance') {
+        if (advanceToEdit) {
+          let modified_by = null;
+          if (currentPartner !== advanceToEdit.assigned_to) {
+            modified_by = currentPartner;
+          }
+
+          await updateAdvance({
+            ...advanceToEdit,
+            amount,
+            label: advLabel,
+            modified_by
+          });
+          await insertActivityLog(householdId!, currentPartner!, 'update', 'advance', advLabel, `${amount.toFixed(2)} €`);
+          addNotification(`Votre modification a bien été prise en compte ("${advLabel}")`);
         } else {
-          modified_by = null;
+          await insertAdvance({
+            month_id: selectedMonthId,
+            assigned_to: currentPartner!,
+            amount,
+            label: advLabel,
+            modified_by: null
+          });
+          await insertActivityLog(householdId!, currentPartner!, 'create', 'advance', advLabel, `${amount.toFixed(2)} €`);
+          addNotification(`Votre saisie a bien été prise en compte ("${advLabel}")`);
+        }
+      } else {
+        // Ventilation / Conversion en charge
+        const addedBy = advanceToEdit ? advanceToEdit.assigned_to : currentPartner!;
+
+        // 1. Insérer la charge
+        await insertCharge({
+          month_id: selectedMonthId,
+          category_id: selectedCategoryInModal,
+          label: advLabel,
+          amount,
+          split_method: selectedSplitMethodInModal,
+          is_recurring: false,
+          added_by: addedBy,
+          modified_by: currentPartner === addedBy ? null : currentPartner!
+        });
+
+        // 2. Si c'est une avance existante, la supprimer
+        if (advanceToEdit && advanceToEdit.id) {
+          deletedAdvancesByMeRef.current.push(advanceToEdit.id);
+          await deleteAdvance(advanceToEdit.id);
+
+          await insertActivityLog(
+            householdId!,
+            currentPartner!,
+            'delete',
+            'advance',
+            advanceToEdit.label,
+            `Ventilée en charge (${categories.find(c => c.id === selectedCategoryInModal)?.name || selectedCategoryInModal})`
+          );
         }
 
-        await updateAdvance({
-          ...advanceToEdit,
-          amount,
-          label: advLabel,
-          modified_by
-        });
-        await insertActivityLog(householdId!, currentPartner!, 'update', 'advance', advLabel, `${amount.toFixed(2)} €`);
-        addNotification(`Votre modification a bien été prise en compte ("${advLabel}")`);
-      } else {
-        await insertAdvance({
-          month_id: selectedMonthId,
-          assigned_to: currentPartner!,
-          amount,
-          label: advLabel,
-          modified_by: null
-        });
-        await insertActivityLog(householdId!, currentPartner!, 'create', 'advance', advLabel, `${amount.toFixed(2)} €`);
-        addNotification(`Votre saisie a bien été prise en compte ("${advLabel}")`);
+        // 3. Log de la nouvelle charge créée
+        await insertActivityLog(
+          householdId!,
+          currentPartner!,
+          'create',
+          'charge',
+          advLabel,
+          `${amount.toFixed(2)} € (Ventilée depuis paiement direct)`
+        );
+
+        addNotification(`La dépense "${advLabel}" a été enregistrée en tant que charge.`);
       }
+
       setAdvLabel('');
       setAdvAmount('');
       setAdvanceToEdit(null);
@@ -895,71 +957,6 @@ export default function App() {
       await deleteAdvance(id);
       await insertActivityLog(householdId!, currentPartner!, 'delete', 'advance', label);
       addNotification(`Votre suppression a bien été prise en compte ("${label}")`);
-    } catch (err) {
-      console.error(err);
-    }
-  };
-
-  const openEditAdvance = (adv: AdvanceType) => {
-    setAdvanceToEdit(adv);
-    setAdvLabel(adv.label);
-    setAdvAmount(adv.amount.toString());
-    setVentilationCategory('basiques');
-    setVentilationSplitMethod('50_50');
-    setShowAddAdvanceModal(true);
-  };
-
-  const handleVentilateAdvance = async () => {
-    if (!advanceToEdit || !advanceToEdit.id) return;
-    const amount = parseFloat(advAmount) || advanceToEdit.amount;
-    const label = advLabel || advanceToEdit.label;
-
-    if (!window.confirm(`Voulez-vous vraiment ventiler le paiement direct "${label}" en charge du compte commun ?\nCette action supprimera le paiement direct et créera une charge de ${amount.toFixed(2)} € dans la catégorie sélectionnée.`)) return;
-
-    try {
-      const addedBy = advanceToEdit.assigned_to;
-
-      // 1. Insérer la charge
-      await insertCharge({
-        month_id: advanceToEdit.month_id,
-        category_id: ventilationCategory,
-        label: label,
-        amount: amount,
-        split_method: ventilationSplitMethod,
-        is_recurring: false,
-        added_by: addedBy,
-        modified_by: currentPartner === addedBy ? null : currentPartner!
-      });
-
-      // 2. Supprimer l'avance
-      deletedAdvancesByMeRef.current.push(advanceToEdit.id);
-      await deleteAdvance(advanceToEdit.id);
-
-      // 3. Log d'activité
-      await insertActivityLog(
-        householdId!,
-        currentPartner!,
-        'delete',
-        'advance',
-        advanceToEdit.label,
-        `Ventilée en charge (${categories.find(c => c.id === ventilationCategory)?.name || ventilationCategory})`
-      );
-      await insertActivityLog(
-        householdId!,
-        currentPartner!,
-        'create',
-        'charge',
-        label,
-        `${amount.toFixed(2)} € (Ventilée depuis paiement direct)`
-      );
-
-      addNotification(`Le paiement direct "${advanceToEdit.label}" a été ventilé en charge.`);
-
-      // Reset & Close
-      setShowAddAdvanceModal(false);
-      setAdvanceToEdit(null);
-      setAdvLabel('');
-      setAdvAmount('');
     } catch (err) {
       console.error(err);
     }
@@ -2073,7 +2070,7 @@ export default function App() {
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <span style={{ fontWeight: '700', fontSize: '14px' }}>Avances / Paiements directs</span>
                 {(selectedMonth.status === 'draft' || selectedMonth.status === 'reopened') && (
-                  <button className="btn-icon" onClick={() => setShowAddAdvanceModal(true)}>
+                  <button className="btn-icon" onClick={openAddAdvance}>
                     <Plus size={16} />
                   </button>
                 )}
@@ -2780,51 +2777,35 @@ export default function App() {
               />
             </div>
 
-            {advanceToEdit && (
-              <div style={{ marginTop: '16px', paddingTop: '16px', borderTop: '1px dashed var(--border)' }}>
-                <div style={{ fontSize: '13px', fontWeight: '800', color: 'var(--primary)', marginBottom: '8px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-                  Ventiler dans une autre catégorie
-                </div>
-                <p style={{ fontSize: '11px', color: 'var(--text-muted)', marginBottom: '12px', lineHeight: '1.4' }}>
-                  Convertissez ce paiement direct en charge partagée du compte commun. Le paiement direct sera supprimé et remplacé par une charge dans la catégorie choisie.
-                </p>
+            <div className="form-group" style={{ marginBottom: '14px' }}>
+              <label>Catégorie</label>
+              <select
+                className="input-field"
+                value={selectedCategoryInModal}
+                onChange={e => setSelectedCategoryInModal(e.target.value)}
+                style={{ fontSize: '13px' }}
+              >
+                <option value="advance">Paiement direct (Avance)</option>
+                {categories.map(c => (
+                  <option key={c.id} value={c.id}>{c.name}</option>
+                ))}
+              </select>
+            </div>
 
-                <div className="form-group" style={{ marginBottom: '10px' }}>
-                  <label style={{ fontSize: '11px', fontWeight: '700', textTransform: 'uppercase', color: 'var(--text-light)' }}>Catégorie de destination</label>
-                  <select
-                    className="input-field"
-                    value={ventilationCategory}
-                    onChange={e => setVentilationCategory(e.target.value)}
-                    style={{ fontSize: '13px' }}
-                  >
-                    {categories.map(c => (
-                      <option key={c.id} value={c.id}>{c.name}</option>
-                    ))}
-                  </select>
-                </div>
-
-                <div className="form-group" style={{ marginBottom: '14px' }}>
-                  <label style={{ fontSize: '11px', fontWeight: '700', textTransform: 'uppercase', color: 'var(--text-light)' }}>Règle de répartition</label>
-                  <select
-                    className="input-field"
-                    value={ventilationSplitMethod}
-                    onChange={e => setVentilationSplitMethod(e.target.value)}
-                    style={{ fontSize: '13px' }}
-                  >
-                    <option value="50_50">50 / 50</option>
-                    <option value="proportional">Au prorata des revenus ({Math.round(calculations.ratioSam * 100)}% Sam / {Math.round(calculations.ratioAurelie * 100)}% Aurélie)</option>
-                    <option value="user1_only">100% {p1Name}</option>
-                    <option value="user2_only">100% {p2Name}</option>
-                  </select>
-                </div>
-
-                <button
-                  className="hud-btn"
-                  style={{ width: '100%', background: 'transparent', border: '1px solid var(--primary)', color: 'var(--primary)', fontWeight: '700', padding: '10px', display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '6px', marginBottom: '16px' }}
-                  onClick={handleVentilateAdvance}
+            {selectedCategoryInModal !== 'advance' && (
+              <div className="form-group" style={{ marginBottom: '14px' }}>
+                <label>Règle de répartition</label>
+                <select
+                  className="input-field"
+                  value={selectedSplitMethodInModal}
+                  onChange={e => setSelectedSplitMethodInModal(e.target.value)}
+                  style={{ fontSize: '13px' }}
                 >
-                  <span>Ventiler en charge du compte commun</span>
-                </button>
+                  <option value="50_50">50 / 50</option>
+                  <option value="proportional">Au prorata des revenus ({Math.round(calculations.ratioSam * 100)}% Sam / {Math.round(calculations.ratioAurelie * 100)}% Aurélie)</option>
+                  <option value="user1_only">100% {p1Name}</option>
+                  <option value="user2_only">100% {p2Name}</option>
+                </select>
               </div>
             )}
 
