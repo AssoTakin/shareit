@@ -1304,9 +1304,9 @@ export default function App() {
     const balanceSam = totalAutresAurelie - totalAutresSam;
     const balanceAurelie = totalAutresSam - totalAutresAurelie;
 
-    // L'ajustement du virement est égal à cette balance (différence totale brute). En moins il vient diminuer le virement, en plus l'augmenter.
-    const virementAdjustmentSam = balanceSam;
-    const virementAdjustmentAurelie = balanceAurelie;
+    // L'ajustement du virement est la moitié de cette balance (division par 2). En moins il vient diminuer le virement, en plus l'augmenter.
+    const virementAdjustmentSam = balanceSam / 2;
+    const virementAdjustmentAurelie = balanceAurelie / 2;
 
     // Calcul final des virements au compte commun en excluant la catégorie 'autres' du compte joint
     const autresDue1 = catDetails['autres']?.due1 || 0;
