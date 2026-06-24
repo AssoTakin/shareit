@@ -1196,8 +1196,10 @@ export default function App() {
       balance2: 0,
       totalAutresSam: 0,
       totalAutresAurelie: 0,
-      avanceDeduireSam: 0,
-      avanceDeduireAurelie: 0,
+      balanceSam: 0,
+      balanceAurelie: 0,
+      virementAdjustmentSam: 0,
+      virementAdjustmentAurelie: 0,
       virementSam: 0,
       virementAurelie: 0,
       catDetails: {} as Record<string, { total: number; due1: number; due2: number }>
@@ -1297,15 +1299,20 @@ export default function App() {
     const totalAutresSam = autresPaid1 + manualAdv1;
     const totalAutresAurelie = postgresAutresPaid2 + manualAdv2;
 
-    const avanceDeduireSam = (totalAutresAurelie - totalAutresSam) / 2;
-    const avanceDeduireAurelie = (totalAutresSam - totalAutresAurelie) / 2;
+    // La balance de rééquilibrage est la différence totale (Sam - Aurélie)
+    const balanceSam = totalAutresSam - totalAutresAurelie;
+    const balanceAurelie = totalAutresAurelie - totalAutresSam;
+
+    // L'ajustement du virement est la moitié de cette balance (avec signe opposé pour équilibrer)
+    const virementAdjustmentSam = -balanceSam / 2;
+    const virementAdjustmentAurelie = -balanceAurelie / 2;
 
     // Calcul final des virements au compte commun en excluant la catégorie 'autres' du compte joint
     const autresDue1 = catDetails['autres']?.due1 || 0;
     const autresDue2 = catDetails['autres']?.due2 || 0;
 
-    const virementSam = Math.ceil((totalDue1 - autresDue1 + avanceDeduireSam) * 100) / 100;
-    const virementAurelie = Math.ceil((totalDue2 - autresDue2 + avanceDeduireAurelie) * 100) / 100;
+    const virementSam = Math.ceil((totalDue1 - autresDue1 + virementAdjustmentSam) * 100) / 100;
+    const virementAurelie = Math.ceil((totalDue2 - autresDue2 + virementAdjustmentAurelie) * 100) / 100;
 
     const totalPaid1 = directPaid1 + manualAdv1;
     const totalPaid2 = directPaid2 + manualAdv2;
@@ -1325,8 +1332,10 @@ export default function App() {
       balance2,
       totalAutresSam,
       totalAutresAurelie,
-      avanceDeduireSam,
-      avanceDeduireAurelie,
+      balanceSam,
+      balanceAurelie,
+      virementAdjustmentSam,
+      virementAdjustmentAurelie,
       virementSam,
       virementAurelie,
       catDetails
@@ -1534,14 +1543,14 @@ export default function App() {
   const activeDue = currentPartner === 'partner1' 
     ? calculations.totalDue1 - (calculations.catDetails['autres']?.due1 || 0)
     : calculations.totalDue2 - (calculations.catDetails['autres']?.due2 || 0);
-  const activeAvance = currentPartner === 'partner1' ? calculations.avanceDeduireSam : calculations.avanceDeduireAurelie;
+  const activeAvance = currentPartner === 'partner1' ? calculations.virementAdjustmentSam : calculations.virementAdjustmentAurelie;
   const activeVirement = currentPartner === 'partner1' ? calculations.virementSam : calculations.virementAurelie;
 
   const otherName = currentPartner === 'partner1' ? p2Name : p1Name;
   const otherDue = currentPartner === 'partner1' 
     ? calculations.totalDue2 - (calculations.catDetails['autres']?.due2 || 0)
     : calculations.totalDue1 - (calculations.catDetails['autres']?.due1 || 0);
-  const otherAvance = currentPartner === 'partner1' ? calculations.avanceDeduireAurelie : calculations.avanceDeduireSam;
+  const otherAvance = currentPartner === 'partner1' ? calculations.virementAdjustmentAurelie : calculations.virementAdjustmentSam;
   const otherVirement = currentPartner === 'partner1' ? calculations.virementAurelie : calculations.virementSam;
 
   return (
@@ -2054,14 +2063,14 @@ export default function App() {
               <div style={{ borderBottom: '1px solid var(--border)', margin: '4px 0', opacity: 0.5 }} />
               <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', marginBottom: '2px' }}>
                 <span>Balance rééquilibrage {p1Name} :</span>
-                <span style={{ fontWeight: '800', color: calculations.avanceDeduireSam >= 0 ? 'var(--error)' : 'var(--success)' }}>
-                  {calculations.avanceDeduireSam >= 0 ? '+' : ''}{calculations.avanceDeduireSam.toFixed(2)} €
+                <span style={{ fontWeight: '800', color: calculations.balanceSam >= 0 ? 'var(--success)' : 'var(--error)' }}>
+                  {calculations.balanceSam >= 0 ? '+' : ''}{calculations.balanceSam.toFixed(2)} €
                 </span>
               </div>
               <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px' }}>
                 <span>Balance rééquilibrage {p2Name} :</span>
-                <span style={{ fontWeight: '800', color: calculations.avanceDeduireAurelie >= 0 ? 'var(--error)' : 'var(--success)' }}>
-                  {calculations.avanceDeduireAurelie >= 0 ? '+' : ''}{calculations.avanceDeduireAurelie.toFixed(2)} €
+                <span style={{ fontWeight: '800', color: calculations.balanceAurelie >= 0 ? 'var(--success)' : 'var(--error)' }}>
+                  {calculations.balanceAurelie >= 0 ? '+' : ''}{calculations.balanceAurelie.toFixed(2)} €
                 </span>
               </div>
             </div>
