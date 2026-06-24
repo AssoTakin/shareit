@@ -2043,14 +2043,23 @@ export default function App() {
               )}
 
               <div style={{ borderBottom: '1px solid var(--border)', margin: '4px 0' }} />
-              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px' }}>
-                <span>Avance à déduire {p1Name} :</span>
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px', color: 'var(--text-light)', marginBottom: '3px' }}>
+                <span>Total payé par {p1Name} :</span>
+                <span style={{ fontWeight: '600' }}>{calculations.totalAutresSam.toFixed(2)} €</span>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px', color: 'var(--text-light)', marginBottom: '6px' }}>
+                <span>Total payé par {p2Name} :</span>
+                <span style={{ fontWeight: '600' }}>{calculations.totalAutresAurelie.toFixed(2)} €</span>
+              </div>
+              <div style={{ borderBottom: '1px solid var(--border)', margin: '4px 0', opacity: 0.5 }} />
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', marginBottom: '2px' }}>
+                <span>Balance rééquilibrage {p1Name} :</span>
                 <span style={{ fontWeight: '800', color: calculations.avanceDeduireSam >= 0 ? 'var(--error)' : 'var(--success)' }}>
                   {calculations.avanceDeduireSam >= 0 ? '+' : ''}{calculations.avanceDeduireSam.toFixed(2)} €
                 </span>
               </div>
               <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px' }}>
-                <span>Avance à déduire {p2Name} :</span>
+                <span>Balance rééquilibrage {p2Name} :</span>
                 <span style={{ fontWeight: '800', color: calculations.avanceDeduireAurelie >= 0 ? 'var(--error)' : 'var(--success)' }}>
                   {calculations.avanceDeduireAurelie >= 0 ? '+' : ''}{calculations.avanceDeduireAurelie.toFixed(2)} €
                 </span>
