@@ -141,6 +141,8 @@ export default function App() {
 
   const [advLabel, setAdvLabel] = useState('');
   const [advAmount, setAdvAmount] = useState('');
+  const [ventilationCategory, setVentilationCategory] = useState('basiques');
+  const [ventilationSplitMethod, setVentilationSplitMethod] = useState('50_50');
 
   const [sal1Input, setSal1Input] = useState('');
   const [sal2Input, setSal2Input] = useState('');
@@ -902,7 +904,65 @@ export default function App() {
     setAdvanceToEdit(adv);
     setAdvLabel(adv.label);
     setAdvAmount(adv.amount.toString());
+    setVentilationCategory('basiques');
+    setVentilationSplitMethod('50_50');
     setShowAddAdvanceModal(true);
+  };
+
+  const handleVentilateAdvance = async () => {
+    if (!advanceToEdit || !advanceToEdit.id) return;
+    const amount = parseFloat(advAmount) || advanceToEdit.amount;
+    const label = advLabel || advanceToEdit.label;
+
+    if (!window.confirm(`Voulez-vous vraiment ventiler le paiement direct "${label}" en charge du compte commun ?\nCette action supprimera le paiement direct et créera une charge de ${amount.toFixed(2)} € dans la catégorie sélectionnée.`)) return;
+
+    try {
+      const addedBy = advanceToEdit.assigned_to;
+
+      // 1. Insérer la charge
+      await insertCharge({
+        month_id: advanceToEdit.month_id,
+        category_id: ventilationCategory,
+        label: label,
+        amount: amount,
+        split_method: ventilationSplitMethod,
+        is_recurring: false,
+        added_by: addedBy,
+        modified_by: currentPartner === addedBy ? null : currentPartner!
+      });
+
+      // 2. Supprimer l'avance
+      deletedAdvancesByMeRef.current.push(advanceToEdit.id);
+      await deleteAdvance(advanceToEdit.id);
+
+      // 3. Log d'activité
+      await insertActivityLog(
+        householdId!,
+        currentPartner!,
+        'delete',
+        'advance',
+        advanceToEdit.label,
+        `Ventilée en charge (${categories.find(c => c.id === ventilationCategory)?.name || ventilationCategory})`
+      );
+      await insertActivityLog(
+        householdId!,
+        currentPartner!,
+        'create',
+        'charge',
+        label,
+        `${amount.toFixed(2)} € (Ventilée depuis paiement direct)`
+      );
+
+      addNotification(`Le paiement direct "${advanceToEdit.label}" a été ventilé en charge.`);
+
+      // Reset & Close
+      setShowAddAdvanceModal(false);
+      setAdvanceToEdit(null);
+      setAdvLabel('');
+      setAdvAmount('');
+    } catch (err) {
+      console.error(err);
+    }
   };
 
   // --- ACTIONS CATÉGORIES ---
@@ -2719,6 +2779,54 @@ export default function App() {
                 placeholder="0.00"
               />
             </div>
+
+            {advanceToEdit && (
+              <div style={{ marginTop: '16px', paddingTop: '16px', borderTop: '1px dashed var(--border)' }}>
+                <div style={{ fontSize: '13px', fontWeight: '800', color: 'var(--primary)', marginBottom: '8px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                  Ventiler dans une autre catégorie
+                </div>
+                <p style={{ fontSize: '11px', color: 'var(--text-muted)', marginBottom: '12px', lineHeight: '1.4' }}>
+                  Convertissez ce paiement direct en charge partagée du compte commun. Le paiement direct sera supprimé et remplacé par une charge dans la catégorie choisie.
+                </p>
+
+                <div className="form-group" style={{ marginBottom: '10px' }}>
+                  <label style={{ fontSize: '11px', fontWeight: '700', textTransform: 'uppercase', color: 'var(--text-light)' }}>Catégorie de destination</label>
+                  <select
+                    className="input-field"
+                    value={ventilationCategory}
+                    onChange={e => setVentilationCategory(e.target.value)}
+                    style={{ fontSize: '13px' }}
+                  >
+                    {categories.map(c => (
+                      <option key={c.id} value={c.id}>{c.name}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="form-group" style={{ marginBottom: '14px' }}>
+                  <label style={{ fontSize: '11px', fontWeight: '700', textTransform: 'uppercase', color: 'var(--text-light)' }}>Règle de répartition</label>
+                  <select
+                    className="input-field"
+                    value={ventilationSplitMethod}
+                    onChange={e => setVentilationSplitMethod(e.target.value)}
+                    style={{ fontSize: '13px' }}
+                  >
+                    <option value="50_50">50 / 50</option>
+                    <option value="proportional">Au prorata des revenus ({Math.round(calculations.ratioSam * 100)}% Sam / {Math.round(calculations.ratioAurelie * 100)}% Aurélie)</option>
+                    <option value="user1_only">100% {p1Name}</option>
+                    <option value="user2_only">100% {p2Name}</option>
+                  </select>
+                </div>
+
+                <button
+                  className="hud-btn"
+                  style={{ width: '100%', background: 'transparent', border: '1px solid var(--primary)', color: 'var(--primary)', fontWeight: '700', padding: '10px', display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '6px', marginBottom: '16px' }}
+                  onClick={handleVentilateAdvance}
+                >
+                  <span>Ventiler en charge du compte commun</span>
+                </button>
+              </div>
+            )}
 
             <div style={{ display: 'flex', gap: '10px', marginTop: '10px' }}>
               <button className="btn-secondary" onClick={() => { setShowAddAdvanceModal(false); setAdvanceToEdit(null); }}>Annuler</button>
