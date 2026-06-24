@@ -1299,13 +1299,14 @@ export default function App() {
     const totalAutresSam = autresPaid1 + manualAdv1;
     const totalAutresAurelie = postgresAutresPaid2 + manualAdv2;
 
-    // La balance de rééquilibrage est la différence totale (Sam - Aurélie)
-    const balanceSam = totalAutresSam - totalAutresAurelie;
-    const balanceAurelie = totalAutresAurelie - totalAutresSam;
+    // La balance de rééquilibrage représente la différence totale à rééquilibrer.
+    // Pour Sam, c'est ce qu'a payé Aurélie moins ce qu'a payé Sam. Ainsi, s'il a trop payé (avance), la balance est négative (moins).
+    const balanceSam = totalAutresAurelie - totalAutresSam;
+    const balanceAurelie = totalAutresSam - totalAutresAurelie;
 
-    // L'ajustement du virement est la moitié de cette balance (avec signe opposé pour équilibrer)
-    const virementAdjustmentSam = -balanceSam / 2;
-    const virementAdjustmentAurelie = -balanceAurelie / 2;
+    // L'ajustement du virement est la moitié de cette balance. En moins il vient diminuer le virement, en plus l'augmenter.
+    const virementAdjustmentSam = balanceSam / 2;
+    const virementAdjustmentAurelie = balanceAurelie / 2;
 
     // Calcul final des virements au compte commun en excluant la catégorie 'autres' du compte joint
     const autresDue1 = catDetails['autres']?.due1 || 0;
@@ -2063,13 +2064,13 @@ export default function App() {
               <div style={{ borderBottom: '1px solid var(--border)', margin: '4px 0', opacity: 0.5 }} />
               <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', marginBottom: '2px' }}>
                 <span>Balance rééquilibrage {p1Name} :</span>
-                <span style={{ fontWeight: '800', color: calculations.balanceSam >= 0 ? 'var(--success)' : 'var(--error)' }}>
+                <span style={{ fontWeight: '800', color: calculations.balanceSam < 0 ? 'var(--success)' : 'var(--error)' }}>
                   {calculations.balanceSam >= 0 ? '+' : ''}{calculations.balanceSam.toFixed(2)} €
                 </span>
               </div>
               <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px' }}>
                 <span>Balance rééquilibrage {p2Name} :</span>
-                <span style={{ fontWeight: '800', color: calculations.balanceAurelie >= 0 ? 'var(--success)' : 'var(--error)' }}>
+                <span style={{ fontWeight: '800', color: calculations.balanceAurelie < 0 ? 'var(--success)' : 'var(--error)' }}>
                   {calculations.balanceAurelie >= 0 ? '+' : ''}{calculations.balanceAurelie.toFixed(2)} €
                 </span>
               </div>
