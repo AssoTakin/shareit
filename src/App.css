@@ -566,3 +566,36 @@
 .switch-track.active .switch-thumb {
   transform: translateX(20px);
 }
+
+/* Responsive & layout optimizations for expense items */
+.charge-pricing-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-shrink: 0;
+}
+
+@media (max-width: 600px) {
+  .table-row {
+    padding: 10px 12px;
+    align-items: flex-start;
+  }
+  
+  .charge-pricing-actions {
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 8px;
+    margin-top: 2px;
+  }
+  
+  .charge-pricing {
+    margin-right: 0;
+    align-items: flex-end;
+  }
+  
+  .charge-meta {
+    margin-top: 4px;
+    line-height: 1.4;
+  }
+}
+

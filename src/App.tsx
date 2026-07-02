@@ -95,7 +95,9 @@ export function formatAdvanceLabel(cleanLabel: string, categoryId: string, split
   return `[${prefix}] ${cleanLabel.trim()}`;
 }
 
-const formatDateTime = (isoString?: string) => {
+
+
+const formatDateTimeShort = (isoString?: string) => {
   if (!isoString) return '';
   const date = new Date(isoString);
   if (isNaN(date.getTime())) return '';
@@ -104,11 +106,10 @@ const formatDateTime = (isoString?: string) => {
   
   const day = pad(date.getDate());
   const month = pad(date.getMonth() + 1);
-  const year = date.getFullYear();
   const hours = pad(date.getHours());
   const minutes = pad(date.getMinutes());
   
-  return `le ${day}/${month}/${year} à ${hours}:${minutes}`;
+  return `${day}/${month} à ${hours}:${minutes}`;
 };
 
 const hasBeenModified = (item: any) => {
@@ -2065,10 +2066,10 @@ export default function App() {
                               )}
                             </div>
                             <div className="charge-meta">
-                              Saisi par : {getPartnerName(paidBy)} {formatDateTime(item.created_at)}
-                              {hasBeenModified(item) && ` • Modifié par : ${getPartnerName(item.modified_by || paidBy)} ${formatDateTime(item.updated_at)}`}
+                              👤 {getPartnerName(paidBy)} • 🕒 {formatDateTimeShort(item.created_at)}
+                              {hasBeenModified(item) && ` • ✏️ ${formatDateTimeShort(item.updated_at)}`}
                               {!isAdv && item.is_validated === false && (
-                                <span style={{ color: 'var(--warning)', fontWeight: 'bold', marginLeft: '6px' }}>• Reconduite (Non validée)</span>
+                                <span style={{ color: 'var(--warning)', fontWeight: 'bold', marginLeft: '6px' }}>• 🔄 Reconduite (Non validée)</span>
                               )}
                               {` • `}
                               (
@@ -2079,40 +2080,42 @@ export default function App() {
                             </div>
                           </div>
 
-                          <div className="charge-pricing" style={{ justifyContent: 'center' }}>
-                            <span className="charge-val">{amount.toFixed(2)} €</span>
-                          </div>
+                          <div className="charge-pricing-actions">
+                            <div className="charge-pricing">
+                              <span className="charge-val">{amount.toFixed(2)} €</span>
+                            </div>
 
-                          {(selectedMonth.status === 'draft' || selectedMonth.status === 'reopened') && (
-                            <div style={{ width: '92px', display: 'flex', justifyContent: 'flex-end', gap: '4px', flexShrink: 0 }}>
-                              {!isAdv && item.is_validated === false && (
+                            {(selectedMonth.status === 'draft' || selectedMonth.status === 'reopened') && (
+                              <div style={{ width: '92px', display: 'flex', justifyContent: 'flex-end', gap: '4px', flexShrink: 0 }}>
+                                {!isAdv && item.is_validated === false && (
+                                  <button 
+                                    className="btn-icon" 
+                                    style={{ background: 'var(--success-light)', color: 'var(--success)', display: 'flex', alignItems: 'center', justifyContent: 'center' }} 
+                                    onClick={() => handleValidateCharge(item)}
+                                    title="Valider la charge reconduite"
+                                  >
+                                    <CheckCircle2 size={13} />
+                                  </button>
+                                )}
                                 <button 
                                   className="btn-icon" 
-                                  style={{ background: 'var(--success-light)', color: 'var(--success)', display: 'flex', alignItems: 'center', justifyContent: 'center' }} 
-                                  onClick={() => handleValidateCharge(item)}
-                                  title="Valider la charge reconduite"
+                                  onClick={() => isAdv ? openEditAdvance(item) : openEditCharge(item)}
+                                  title={!isAdv && item.is_validated === false ? "Modifier et valider" : "Modifier"}
                                 >
-                                  <CheckCircle2 size={13} />
+                                  <Edit2 size={13} />
                                 </button>
-                              )}
-                              <button 
-                                className="btn-icon" 
-                                onClick={() => isAdv ? openEditAdvance(item) : openEditCharge(item)}
-                                title={!isAdv && item.is_validated === false ? "Modifier et valider" : "Modifier"}
-                              >
-                                <Edit2 size={13} />
-                              </button>
-                              {((isAdv && item.assigned_to === currentPartner) || (!isAdv && item.added_by === currentPartner)) && (
-                                <button 
-                                  className="btn-icon delete" 
-                                  onClick={() => isAdv ? handleDeleteAdvance(item.id!, label) : handleDeleteCharge(item.id!, item.label)} 
-                                  title="Supprimer"
-                                >
-                                  <Trash2 size={13} />
-                                </button>
-                              )}
-                            </div>
-                          )}
+                                {((isAdv && item.assigned_to === currentPartner) || (!isAdv && item.added_by === currentPartner)) && (
+                                  <button 
+                                    className="btn-icon delete" 
+                                    onClick={() => isAdv ? handleDeleteAdvance(item.id!, label) : handleDeleteCharge(item.id!, item.label)} 
+                                    title="Supprimer"
+                                  >
+                                    <Trash2 size={13} />
+                                  </button>
+                                )}
+                              </div>
+                            )}
+                          </div>
                         </div>
                       );
                     })
@@ -2169,12 +2172,12 @@ export default function App() {
                       parsed.split_method === 'user2_only' ? adv.amount : 0
                     );
                     return (
-                      <div key={adv.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '13px', padding: '4px 0', borderBottom: '1px solid var(--border)', lastChild: { borderBottom: 'none' } } as any}>
-                        <div style={{ flex: 1, minWidth: 0, paddingRight: '8px' }}>
+                      <div key={adv.id} className="table-row" style={{ borderBottom: '1px solid var(--border)', padding: '8px 0' }}>
+                        <div className="charge-details">
                           <div style={{ fontWeight: '600' }}>{parsed.cleanLabel}</div>
-                          <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
-                            Saisi par : {getPartnerName(adv.assigned_to)} {formatDateTime(adv.created_at)}
-                            {hasBeenModified(parsed) && ` • Modifié par : ${getPartnerName(adv.modified_by || adv.assigned_to)} ${formatDateTime(parsed.updated_at)}`}
+                          <div className="charge-meta">
+                            👤 {getPartnerName(adv.assigned_to)} • 🕒 {formatDateTimeShort(adv.created_at)}
+                            {hasBeenModified(parsed) && ` • ✏️ ${formatDateTimeShort(parsed.updated_at)}`}
                             {parsed.category_id !== 'autres' && ` • Catégorie : ${catName}`}
                             {` • `}
                             (
@@ -2184,8 +2187,10 @@ export default function App() {
                             )
                           </div>
                         </div>
-                        <div style={{ display: 'flex', alignItems: 'center', flexShrink: 0 }}>
-                          <span style={{ fontWeight: '700', width: '80px', textAlign: 'right', marginRight: '12px' }}>{adv.amount.toFixed(2)} €</span>
+                        <div className="charge-pricing-actions">
+                          <div className="charge-pricing">
+                            <span style={{ fontWeight: '700', width: '80px', textAlign: 'right', marginRight: '12px' }}>{adv.amount.toFixed(2)} €</span>
+                          </div>
                           {(selectedMonth.status === 'draft' || selectedMonth.status === 'reopened') && (
                             <div style={{ width: '60px', display: 'flex', justifyContent: 'flex-end', gap: '4px', flexShrink: 0 }}>
                               <button className="btn-icon" onClick={() => openEditAdvance(adv)}>
