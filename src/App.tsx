@@ -143,6 +143,7 @@ export default function App() {
   const [selectedMonth, setSelectedMonth] = useState<MonthType | null>(null);
   const [charges, setCharges] = useState<ChargeType[]>([]);
   const [advances, setAdvances] = useState<AdvanceType[]>([]);
+  const parsedAdvances = useMemo(() => advances.map(parseAdvance), [advances]);
   const [categories, setCategories] = useState<CategoryType[]>([]);
   const [templates, setTemplates] = useState<TemplateType[]>([]);
 
@@ -1654,8 +1655,6 @@ export default function App() {
 
   const p1Name = household.partner1_name;
   const p2Name = household.partner2_name;
-
-  const parsedAdvances = useMemo(() => advances.map(parseAdvance), [advances]);
 
   const activeName = currentPartner === 'partner1' ? p1Name : p2Name;
   const activeDue = currentPartner === 'partner1' ? calculations.totalDue1 : calculations.totalDue2;
