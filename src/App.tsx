@@ -2090,7 +2090,7 @@ export default function App() {
                           </div>
 
                           {(selectedMonth.status === 'draft' || selectedMonth.status === 'reopened') && (
-                            <div className="actions-row">
+                            <div style={{ width: '92px', display: 'flex', justifyContent: 'flex-end', gap: '4px', flexShrink: 0 }}>
                               {!isAdv && item.is_validated === false && (
                                 <button 
                                   className="btn-icon" 
