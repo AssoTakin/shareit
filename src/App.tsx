@@ -1657,6 +1657,13 @@ export default function App() {
   const p1Name = household.partner1_name;
   const p2Name = household.partner2_name;
 
+  const getPartnerShort = (partnerId?: string | null) => {
+    if (!partnerId) return '';
+    if (partnerId === 'partner1') return p1Name ? p1Name.charAt(0).toUpperCase() : 'S';
+    if (partnerId === 'partner2') return p2Name ? p2Name.charAt(0).toUpperCase() : 'A';
+    return partnerId;
+  };
+
   const activeName = currentPartner === 'partner1' ? p1Name : p2Name;
   const activeDue = currentPartner === 'partner1' ? calculations.totalDue1 : calculations.totalDue2;
   const activeAvance = currentPartner === 'partner1' ? calculations.virementAdjustmentSam : calculations.virementAdjustmentAurelie;
@@ -2066,8 +2073,8 @@ export default function App() {
                               )}
                             </div>
                             <div className="charge-meta">
-                              👤 {getPartnerName(paidBy)} • 🕒 {formatDateTimeShort(item.created_at)}
-                              {hasBeenModified(item) && ` • ✏️ ${formatDateTimeShort(item.updated_at)}`}
+                              👤 {getPartnerShort(paidBy)} • 🕒 {formatDateTimeShort(item.created_at)}
+                              {hasBeenModified(item) && ` • ✏️ ${getPartnerShort(item.modified_by || (paidBy === 'partner1' ? 'partner2' : 'partner1'))} ${formatDateTimeShort(item.updated_at)}`}
                               {!isAdv && item.is_validated === false && (
                                 <span style={{ color: 'var(--warning)', fontWeight: 'bold', marginLeft: '6px' }}>• 🔄 Reconduite (Non validée)</span>
                               )}
@@ -2086,7 +2093,7 @@ export default function App() {
                             </div>
 
                             {(selectedMonth.status === 'draft' || selectedMonth.status === 'reopened') && (
-                              <div style={{ width: '92px', display: 'flex', justifyContent: 'flex-end', gap: '4px', flexShrink: 0 }}>
+                              <div className="actions-row-container">
                                 {!isAdv && item.is_validated === false && (
                                   <button 
                                     className="btn-icon" 
@@ -2176,8 +2183,8 @@ export default function App() {
                         <div className="charge-details">
                           <div style={{ fontWeight: '600' }}>{parsed.cleanLabel}</div>
                           <div className="charge-meta">
-                            👤 {getPartnerName(adv.assigned_to)} • 🕒 {formatDateTimeShort(adv.created_at)}
-                            {hasBeenModified(parsed) && ` • ✏️ ${formatDateTimeShort(parsed.updated_at)}`}
+                            👤 {getPartnerShort(adv.assigned_to)} • 🕒 {formatDateTimeShort(adv.created_at)}
+                            {hasBeenModified(parsed) && ` • ✏️ ${getPartnerShort(parsed.modified_by || (adv.assigned_to === 'partner1' ? 'partner2' : 'partner1'))} ${formatDateTimeShort(parsed.updated_at)}`}
                             {parsed.category_id !== 'autres' && ` • Catégorie : ${catName}`}
                             {` • `}
                             (
@@ -2192,7 +2199,7 @@ export default function App() {
                             <span style={{ fontWeight: '700', width: '80px', textAlign: 'right', marginRight: '12px' }}>{adv.amount.toFixed(2)} €</span>
                           </div>
                           {(selectedMonth.status === 'draft' || selectedMonth.status === 'reopened') && (
-                            <div style={{ width: '60px', display: 'flex', justifyContent: 'flex-end', gap: '4px', flexShrink: 0 }}>
+                            <div className="actions-row-container advances-actions">
                               <button className="btn-icon" onClick={() => openEditAdvance(adv)}>
                                 <Edit2 size={12} />
                               </button>
