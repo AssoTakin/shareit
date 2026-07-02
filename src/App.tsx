@@ -2172,27 +2172,29 @@ export default function App() {
                     };
                     const catName = categories.find(c => c.id === parsed.category_id)?.name || parsed.category_id;
                     return (
-                      <div key={adv.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '13px' }}>
-                        <div>
+                      <div key={adv.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '13px', padding: '4px 0', borderBottom: '1px solid var(--border)', lastChild: { borderBottom: 'none' } } as any}>
+                        <div style={{ flex: 1, minWidth: 0, paddingRight: '8px' }}>
                           <div style={{ fontWeight: '600' }}>{parsed.cleanLabel}</div>
                           <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
                             Saisi par : {getPartnerName(adv.assigned_to)} {formatDateTime(adv.created_at)}
                             {hasBeenModified(parsed) && ` • Modifié par : ${getPartnerName(adv.modified_by || adv.assigned_to)} ${formatDateTime(parsed.updated_at)}`}
                             {parsed.category_id !== 'autres' && ` • Catégorie : ${catName}`}
-                            {parsed.split_method !== '50_50' && ` • Répartition : ${getSplitLabel(parsed.split_method)}`}
+                            {` • Clé : ${getSplitLabel(parsed.split_method)}`}
                           </div>
                         </div>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                          <span style={{ fontWeight: '700', marginRight: '4px' }}>{adv.amount.toFixed(2)} €</span>
+                        <div style={{ display: 'flex', alignItems: 'center', flexShrink: 0 }}>
+                          <span style={{ fontWeight: '700', width: '80px', textAlign: 'right', marginRight: '12px' }}>{adv.amount.toFixed(2)} €</span>
                           {(selectedMonth.status === 'draft' || selectedMonth.status === 'reopened') && (
-                            <div className="actions-row">
+                            <div style={{ width: '60px', display: 'flex', justifyContent: 'flex-end', gap: '4px', flexShrink: 0 }}>
                               <button className="btn-icon" onClick={() => openEditAdvance(adv)}>
                                 <Edit2 size={12} />
                               </button>
-                              {adv.assigned_to === currentPartner && (
+                              {adv.assigned_to === currentPartner ? (
                                 <button className="btn-icon delete" onClick={() => handleDeleteAdvance(adv.id!, parsed.cleanLabel)}>
                                   <Trash2 size={12} />
                                 </button>
+                              ) : (
+                                <div style={{ width: '28px' }} />
                               )}
                             </div>
                           )}
