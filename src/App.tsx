@@ -2072,18 +2072,21 @@ export default function App() {
                                 </button>
                               )}
                             </div>
-                            <div className="charge-meta">
-                              👤 {getPartnerShort(paidBy)} • 🕒 {formatDateTimeShort(item.created_at)}
-                              {hasBeenModified(item) && ` • ✏️ ${getPartnerShort(item.modified_by || (paidBy === 'partner1' ? 'partner2' : 'partner1'))} ${formatDateTimeShort(item.updated_at)}`}
-                              {!isAdv && item.is_validated === false && (
-                                <span style={{ color: 'var(--warning)', fontWeight: 'bold', marginLeft: '6px' }}>• 🔄 Reconduite (Non validée)</span>
+                            <div className="charge-meta" style={{ display: 'flex', flexDirection: 'column', gap: '2px', marginTop: '4px' }}>
+                              <div>👤 {getPartnerShort(paidBy)} • 🕒 {formatDateTimeShort(item.created_at)}</div>
+                              {hasBeenModified(item) && (
+                                <div>✏️ {getPartnerShort(item.modified_by || (paidBy === 'partner1' ? 'partner2' : 'partner1'))} • 🕒 {formatDateTimeShort(item.updated_at)}</div>
                               )}
-                              {` • `}
-                              (
-                              <span style={{ color: 'var(--primary)', fontWeight: '600' }}>S : {samShare.toFixed(1)}</span>
-                              {` `}
-                              <span style={{ color: 'var(--secondary)', fontWeight: '600' }}>A : {aurelieShare.toFixed(1)}</span>
-                              )
+                              <div>
+                                (
+                                <span style={{ color: 'var(--primary)', fontWeight: '600' }}>S : {samShare.toFixed(1)}</span>
+                                {` `}
+                                <span style={{ color: 'var(--secondary)', fontWeight: '600' }}>A : {aurelieShare.toFixed(1)}</span>
+                                )
+                              </div>
+                              {!isAdv && item.is_validated === false && (
+                                <span style={{ color: 'var(--warning)', fontWeight: 'bold' }}>🔄 Reconduite (Non validée)</span>
+                              )}
                             </div>
                           </div>
 
@@ -2182,16 +2185,19 @@ export default function App() {
                       <div key={adv.id} className="table-row" style={{ borderBottom: '1px solid var(--border)', padding: '8px 0' }}>
                         <div className="charge-details">
                           <div style={{ fontWeight: '600' }}>{parsed.cleanLabel}</div>
-                          <div className="charge-meta">
-                            👤 {getPartnerShort(adv.assigned_to)} • 🕒 {formatDateTimeShort(adv.created_at)}
-                            {hasBeenModified(parsed) && ` • ✏️ ${getPartnerShort(parsed.modified_by || (adv.assigned_to === 'partner1' ? 'partner2' : 'partner1'))} ${formatDateTimeShort(parsed.updated_at)}`}
-                            {parsed.category_id !== 'autres' && ` • Catégorie : ${catName}`}
-                            {` • `}
-                            (
-                            <span style={{ color: 'var(--primary)', fontWeight: '600' }}>S : {samShare.toFixed(1)}</span>
-                            {` `}
-                            <span style={{ color: 'var(--secondary)', fontWeight: '600' }}>A : {aurelieShare.toFixed(1)}</span>
-                            )
+                          <div className="charge-meta" style={{ display: 'flex', flexDirection: 'column', gap: '2px', marginTop: '4px' }}>
+                            <div>👤 {getPartnerShort(adv.assigned_to)} • 🕒 {formatDateTimeShort(adv.created_at)}</div>
+                            {hasBeenModified(parsed) && (
+                              <div>✏️ {getPartnerShort(parsed.modified_by || (adv.assigned_to === 'partner1' ? 'partner2' : 'partner1'))} • 🕒 {formatDateTimeShort(parsed.updated_at)}</div>
+                            )}
+                            {parsed.category_id !== 'autres' && <div>Catégorie : {catName}</div>}
+                            <div>
+                              (
+                              <span style={{ color: 'var(--primary)', fontWeight: '600' }}>S : {samShare.toFixed(1)}</span>
+                              {` `}
+                              <span style={{ color: 'var(--secondary)', fontWeight: '600' }}>A : {aurelieShare.toFixed(1)}</span>
+                              )
+                            </div>
                           </div>
                         </div>
                         <div className="charge-pricing-actions">
