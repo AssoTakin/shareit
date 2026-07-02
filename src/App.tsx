@@ -64,6 +64,61 @@ import type {
 } from './supabase';
 import './App.css';
 
+export interface ParsedAdvance extends AdvanceType {
+  cleanLabel: string;
+  category_id: string;
+  split_method: string;
+  updated_at?: string;
+}
+
+export function parseAdvance(adv: AdvanceType): ParsedAdvance {
+  const match = adv.label.match(/^\[([^\]:]+):([^\]:]+)(?::([^\]]+))?\]\s*(.*)$/);
+  if (match) {
+    return {
+      ...adv,
+      category_id: match[1],
+      split_method: match[2],
+      updated_at: match[3] || undefined,
+      cleanLabel: match[4]
+    };
+  }
+  return {
+    ...adv,
+    category_id: 'autres',
+    split_method: '50_50',
+    cleanLabel: adv.label
+  };
+}
+
+export function formatAdvanceLabel(cleanLabel: string, categoryId: string, splitMethod: string, updatedAt?: string): string {
+  const prefix = updatedAt ? `${categoryId}:${splitMethod}:${updatedAt}` : `${categoryId}:${splitMethod}`;
+  return `[${prefix}] ${cleanLabel.trim()}`;
+}
+
+const formatDateTime = (isoString?: string) => {
+  if (!isoString) return '';
+  const date = new Date(isoString);
+  if (isNaN(date.getTime())) return '';
+  
+  const pad = (n: number) => n.toString().padStart(2, '0');
+  
+  const day = pad(date.getDate());
+  const month = pad(date.getMonth() + 1);
+  const year = date.getFullYear();
+  const hours = pad(date.getHours());
+  const minutes = pad(date.getMinutes());
+  
+  return `le ${day}/${month}/${year} à ${hours}:${minutes}`;
+};
+
+const hasBeenModified = (item: any) => {
+  if (!item.updated_at || !item.created_at) return false;
+  const createdTime = new Date(item.created_at).getTime();
+  const updatedTime = new Date(item.updated_at).getTime();
+  return Math.abs(updatedTime - createdTime) > 1000;
+};
+
+
 export default function App() {
   const isConfigured = isSupabaseConfigured();
   const [householdId, setHouseholdId] = useState<string | null>(localStorage.getItem('share_it_household_id'));
@@ -141,7 +196,7 @@ export default function App() {
 
   const [advLabel, setAdvLabel] = useState('');
   const [advAmount, setAdvAmount] = useState('');
-  const [selectedCategoryInModal, setSelectedCategoryInModal] = useState('advance');
+  const [selectedCategoryInModal, setSelectedCategoryInModal] = useState('autres');
   const [selectedSplitMethodInModal, setSelectedSplitMethodInModal] = useState('50_50');
 
   const [sal1Input, setSal1Input] = useState('');
@@ -701,13 +756,14 @@ export default function App() {
 
     try {
       const assignedTo = chargeToEdit.added_by || currentPartner!;
+      const formattedLabel = formatAdvanceLabel(chargeLabel, chargeToEdit.category_id, chargeToEdit.split_method);
 
       // 1. Insérer l'avance
       await insertAdvance({
         month_id: chargeToEdit.month_id,
         assigned_to: assignedTo,
         amount: amount,
-        label: chargeLabel,
+        label: formattedLabel,
         modified_by: currentPartner === assignedTo ? null : currentPartner!
       });
 
@@ -747,6 +803,11 @@ export default function App() {
   };
 
   const handleDeleteCharge = async (id: string, label: string) => {
+    const charge = charges.find(c => c.id === id);
+    if (charge && charge.added_by !== currentPartner) {
+      alert("Vous ne pouvez pas supprimer une charge dont vous n'êtes pas à l'origine.");
+      return;
+    }
     if (!window.confirm(`Voulez-vous vraiment supprimer la charge "${label}" ?`)) return;
     try {
       deletedChargesByMeRef.current.push(id);
@@ -853,17 +914,18 @@ export default function App() {
     setAdvanceToEdit(null);
     setAdvLabel('');
     setAdvAmount('');
-    setSelectedCategoryInModal('advance');
+    setSelectedCategoryInModal('autres');
     setSelectedSplitMethodInModal('50_50');
     setShowAddAdvanceModal(true);
   };
 
   const openEditAdvance = (adv: AdvanceType) => {
+    const parsed = parseAdvance(adv);
     setAdvanceToEdit(adv);
-    setAdvLabel(adv.label);
+    setAdvLabel(parsed.cleanLabel);
     setAdvAmount(adv.amount.toString());
-    setSelectedCategoryInModal('advance');
-    setSelectedSplitMethodInModal('50_50');
+    setSelectedCategoryInModal(parsed.category_id);
+    setSelectedSplitMethodInModal(parsed.split_method);
     setShowAddAdvanceModal(true);
   };
 
@@ -871,75 +933,35 @@ export default function App() {
     if (!selectedMonthId || !advLabel || !advAmount) return;
     try {
       const amount = parseFloat(advAmount) || 0;
-      
-      if (selectedCategoryInModal === 'advance') {
-        if (advanceToEdit) {
-          let modified_by = null;
-          if (currentPartner !== advanceToEdit.assigned_to) {
-            modified_by = currentPartner;
-          }
 
-          await updateAdvance({
-            ...advanceToEdit,
-            amount,
-            label: advLabel,
-            modified_by
-          });
-          await insertActivityLog(householdId!, currentPartner!, 'update', 'advance', advLabel, `${amount.toFixed(2)} €`);
-          addNotification(`Votre modification a bien été prise en compte ("${advLabel}")`);
-        } else {
-          await insertAdvance({
-            month_id: selectedMonthId,
-            assigned_to: currentPartner!,
-            amount,
-            label: advLabel,
-            modified_by: null
-          });
-          await insertActivityLog(householdId!, currentPartner!, 'create', 'advance', advLabel, `${amount.toFixed(2)} €`);
-          addNotification(`Votre saisie a bien été prise en compte ("${advLabel}")`);
+      if (advanceToEdit) {
+        let modified_by = null;
+        if (currentPartner !== advanceToEdit.assigned_to) {
+          modified_by = currentPartner;
         }
-      } else {
-        // Ventilation / Conversion en charge
-        const addedBy = advanceToEdit ? advanceToEdit.assigned_to : currentPartner!;
 
-        // 1. Insérer la charge
-        await insertCharge({
-          month_id: selectedMonthId,
-          category_id: selectedCategoryInModal,
-          label: advLabel,
+        const formattedLabel = formatAdvanceLabel(advLabel, selectedCategoryInModal, selectedSplitMethodInModal, new Date().toISOString());
+
+        await updateAdvance({
+          ...advanceToEdit,
           amount,
-          split_method: selectedSplitMethodInModal,
-          is_recurring: false,
-          added_by: addedBy,
-          modified_by: currentPartner === addedBy ? null : currentPartner!
+          label: formattedLabel,
+          modified_by
         });
+        await insertActivityLog(householdId!, currentPartner!, 'update', 'advance', advLabel, `${amount.toFixed(2)} €`);
+        addNotification(`Votre modification a bien été prise en compte ("${advLabel}")`);
+      } else {
+        const formattedLabel = formatAdvanceLabel(advLabel, selectedCategoryInModal, selectedSplitMethodInModal);
 
-        // 2. Si c'est une avance existante, la supprimer
-        if (advanceToEdit && advanceToEdit.id) {
-          deletedAdvancesByMeRef.current.push(advanceToEdit.id);
-          await deleteAdvance(advanceToEdit.id);
-
-          await insertActivityLog(
-            householdId!,
-            currentPartner!,
-            'delete',
-            'advance',
-            advanceToEdit.label,
-            `Ventilée en charge (${categories.find(c => c.id === selectedCategoryInModal)?.name || selectedCategoryInModal})`
-          );
-        }
-
-        // 3. Log de la nouvelle charge créée
-        await insertActivityLog(
-          householdId!,
-          currentPartner!,
-          'create',
-          'charge',
-          advLabel,
-          `${amount.toFixed(2)} € (Ventilée depuis paiement direct)`
-        );
-
-        addNotification(`La dépense "${advLabel}" a été enregistrée en tant que charge.`);
+        await insertAdvance({
+          month_id: selectedMonthId,
+          assigned_to: currentPartner!,
+          amount,
+          label: formattedLabel,
+          modified_by: null
+        });
+        await insertActivityLog(householdId!, currentPartner!, 'create', 'advance', advLabel, `${amount.toFixed(2)} €`);
+        addNotification(`Votre saisie a bien été prise en compte ("${advLabel}")`);
       }
 
       setAdvLabel('');
@@ -952,6 +974,12 @@ export default function App() {
   };
 
   const handleDeleteAdvance = async (id: string, label: string) => {
+    const adv = advances.find(a => a.id === id);
+    if (adv && adv.assigned_to !== currentPartner) {
+      alert("Vous ne pouvez pas supprimer une avance dont vous n'êtes pas à l'origine.");
+      return;
+    }
+    if (!window.confirm(`Voulez-vous vraiment supprimer l'avance "${label}" ?`)) return;
     try {
       deletedAdvancesByMeRef.current.push(id);
       await deleteAdvance(id);
@@ -1330,50 +1358,80 @@ export default function App() {
       }
     });
 
-    let manualAdv1 = 0;
-    let manualAdv2 = 0;
-    advances.forEach(a => {
-      if (a.assigned_to === 'partner1') {
-        manualAdv1 += a.amount;
+    const parsedAdvances = advances.map(parseAdvance);
+
+    let totalAdvPaid1 = 0;
+    let totalAdvPaid2 = 0;
+    let totalAdvDue1 = 0;
+    let totalAdvDue2 = 0;
+
+    let balSam = 0;
+    let balAurelie = 0;
+
+    parsedAdvances.forEach(adv => {
+      const amt = adv.amount;
+      let d1 = 0;
+      let d2 = 0;
+
+      switch (adv.split_method) {
+        case 'proportional':
+          d1 = amt * ratioSam;
+          d2 = amt * ratioAurelie;
+          break;
+        case '50_50':
+          d1 = amt / 2;
+          d2 = amt / 2;
+          break;
+        case 'user1_only':
+          d1 = amt;
+          d2 = 0;
+          break;
+        case 'user2_only':
+          d1 = 0;
+          d2 = amt;
+          break;
+        default:
+          d1 = amt / 2;
+          d2 = amt / 2;
+      }
+
+      totalAdvDue1 += d1;
+      totalAdvDue2 += d2;
+
+      // Ajouter l'avance au détail de sa catégorie correspondante
+      const catId = catDetails[adv.category_id] ? adv.category_id : 'autres';
+      catDetails[catId].total += amt;
+      catDetails[catId].due1 += d1;
+      catDetails[catId].due2 += d2;
+
+      const is5050 = adv.split_method === '50_50';
+
+      if (adv.assigned_to === 'partner1') {
+        totalAdvPaid1 += amt;
+        balSam += is5050 ? -amt : (d1 - amt);
+        balAurelie += is5050 ? amt : d2;
       } else {
-        manualAdv2 += a.amount;
+        totalAdvPaid2 += amt;
+        balSam += is5050 ? amt : d1;
+        balAurelie += is5050 ? -amt : (d2 - amt);
       }
     });
 
-    // Somme des charges et avances de la catégorie 'autres'
-    let autresPaid1 = 0;
-    let postgresAutresPaid2 = 0; // Avoid shadowing or naming issues, let's keep it simple
-    charges.forEach(c => {
-      if (c.category_id === 'autres') {
-        if (c.added_by === 'partner1') {
-          autresPaid1 += c.amount;
-        } else {
-          postgresAutresPaid2 += c.amount;
-        }
-      }
-    });
+    // Ajustement de virement = part due - ce qui a été payé
+    const virementAdjustmentSam = totalAdvDue1 - totalAdvPaid1;
+    const virementAdjustmentAurelie = totalAdvDue2 - totalAdvPaid2;
 
-    const totalAutresSam = autresPaid1 + manualAdv1;
-    const totalAutresAurelie = postgresAutresPaid2 + manualAdv2;
+    const balanceSam = balSam;
+    const balanceAurelie = balAurelie;
 
-    // La balance de rééquilibrage représente la différence totale à rééquilibrer.
-    // Pour Sam, c'est ce qu'a payé Aurélie moins ce qu'a payé Sam. Ainsi, s'il a trop payé (avance), la balance est négative (moins).
-    const balanceSam = totalAutresAurelie - totalAutresSam;
-    const balanceAurelie = totalAutresSam - totalAutresAurelie;
+    const totalAutresSam = totalAdvPaid1;
+    const totalAutresAurelie = totalAdvPaid2;
 
-    // L'ajustement du virement est la moitié de cette balance (division par 2). En moins il vient diminuer le virement, en plus l'augmenter.
-    const virementAdjustmentSam = balanceSam / 2;
-    const virementAdjustmentAurelie = balanceAurelie / 2;
+    const virementSam = Math.ceil((totalDue1 + virementAdjustmentSam) * 100) / 100;
+    const virementAurelie = Math.ceil((totalDue2 + virementAdjustmentAurelie) * 100) / 100;
 
-    // Calcul final des virements au compte commun en excluant la catégorie 'autres' du compte joint
-    const autresDue1 = catDetails['autres']?.due1 || 0;
-    const autresDue2 = catDetails['autres']?.due2 || 0;
-
-    const virementSam = Math.ceil((totalDue1 - autresDue1 + virementAdjustmentSam) * 100) / 100;
-    const virementAurelie = Math.ceil((totalDue2 - autresDue2 + virementAdjustmentAurelie) * 100) / 100;
-
-    const totalPaid1 = directPaid1 + manualAdv1;
-    const totalPaid2 = directPaid2 + manualAdv2;
+    const totalPaid1 = directPaid1 + totalAdvPaid1;
+    const totalPaid2 = directPaid2 + totalAdvPaid2;
 
     const balance1 = totalPaid1 - totalDue1;
     const balance2 = totalPaid2 - totalDue2;
@@ -1597,17 +1655,15 @@ export default function App() {
   const p1Name = household.partner1_name;
   const p2Name = household.partner2_name;
 
+  const parsedAdvances = useMemo(() => advances.map(parseAdvance), [advances]);
+
   const activeName = currentPartner === 'partner1' ? p1Name : p2Name;
-  const activeDue = currentPartner === 'partner1' 
-    ? calculations.totalDue1 - (calculations.catDetails['autres']?.due1 || 0)
-    : calculations.totalDue2 - (calculations.catDetails['autres']?.due2 || 0);
+  const activeDue = currentPartner === 'partner1' ? calculations.totalDue1 : calculations.totalDue2;
   const activeAvance = currentPartner === 'partner1' ? calculations.virementAdjustmentSam : calculations.virementAdjustmentAurelie;
   const activeVirement = currentPartner === 'partner1' ? calculations.virementSam : calculations.virementAurelie;
 
   const otherName = currentPartner === 'partner1' ? p2Name : p1Name;
-  const otherDue = currentPartner === 'partner1' 
-    ? calculations.totalDue2 - (calculations.catDetails['autres']?.due2 || 0)
-    : calculations.totalDue1 - (calculations.catDetails['autres']?.due1 || 0);
+  const otherDue = currentPartner === 'partner1' ? calculations.totalDue2 : calculations.totalDue1;
   const otherAvance = currentPartner === 'partner1' ? calculations.virementAdjustmentAurelie : calculations.virementAdjustmentSam;
   const otherVirement = currentPartner === 'partner1' ? calculations.virementAurelie : calculations.virementSam;
 
@@ -1895,8 +1951,14 @@ export default function App() {
             </div>
 
             {/* Listes dynamiques par catégorie */}
-            {categories.map(cat => {
-              const catCharges = charges.filter(ch => ch.category_id === cat.id);
+            {categories.filter(cat => cat.id !== 'autres').map(cat => {
+              const catCharges = charges.filter(ch => ch.category_id === cat.id).map(ch => ({ ...ch, isAdvance: false }));
+              const catAdvances = parsedAdvances.filter(adv => adv.category_id === cat.id).map(adv => ({ ...adv, isAdvance: true }));
+              const catItems = [...catCharges, ...catAdvances].sort((a, b) => {
+                const dateA = a.created_at ? new Date(a.created_at).getTime() : 0;
+                const dateB = b.created_at ? new Date(b.created_at).getTime() : 0;
+                return dateA - dateB;
+              });
               const catInfo = calculations.catDetails[cat.id] || { total: 0, due1: 0, due2: 0 };
               
               return (
@@ -1936,113 +1998,131 @@ export default function App() {
                     </div>
                   </div>
 
-                  {catCharges.length === 0 ? (
+                  {catItems.length === 0 ? (
                     <div style={{ padding: '12px 14px', fontSize: '12px', color: 'var(--text-light)', textAlign: 'center' }}>
                       Aucune charge dans cette catégorie
                     </div>
                   ) : (
-                    catCharges.map(charge => (
-                      <div key={charge.id} className="table-row">
-                        <div className="charge-details">
-                          <div className="charge-title" style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
-                            <span>{charge.label}</span>
-                            {charge.is_recurring && <RefreshCw size={10} style={{ color: 'var(--primary)', flexShrink: 0 }} />}
-                            {charge.is_validated === false && (
-                              <span className="badge-status pending" style={{ fontSize: '9px', padding: '1px 6px', flexShrink: 0 }}>À valider ⏳</span>
-                            )}
-                            
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                openCommentsForCharge(charge);
-                              }}
-                              style={{
-                                background: 'none',
-                                border: 'none',
-                                padding: '2px 4px',
-                                display: 'inline-flex',
-                                alignItems: 'center',
-                                gap: '3px',
-                                cursor: 'pointer',
-                                color: (comments[charge.id!] && comments[charge.id!].length > 0) ? 'var(--primary)' : 'var(--text-light)',
-                                opacity: (comments[charge.id!] && comments[charge.id!].length > 0) ? 1 : 0.4,
-                                transition: 'opacity 0.2s',
-                                borderRadius: '4px',
-                                flexShrink: 0
-                              }}
-                              className="comment-icon-btn"
-                              title="Poser une question / Voir les commentaires"
-                            >
-                              <MessageSquare size={11} />
-                              {comments[charge.id!] && comments[charge.id!].length > 0 && (
-                                <span style={{ fontSize: '9px', fontWeight: 'bold' }}>{comments[charge.id!].length}</span>
+                    catItems.map((item: any) => {
+                      const isAdv = item.isAdvance;
+                      const paidBy = isAdv ? item.assigned_to : item.added_by;
+                      const label = isAdv ? item.cleanLabel : item.label;
+                      const split = item.split_method;
+                      const amount = item.amount;
+                      
+                      return (
+                        <div key={item.id} className="table-row">
+                          <div className="charge-details">
+                            <div className="charge-title" style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
+                              <span>{label}</span>
+                              {isAdv && (
+                                <span className="badge-status" style={{ fontSize: '9px', padding: '1px 6px', background: 'var(--primary-light)', color: 'var(--primary)', fontWeight: '700', borderRadius: '4px', flexShrink: 0 }}>
+                                  Avance par {getPartnerName(paidBy)} 💸
+                                </span>
                               )}
-                            </button>
+                              {!isAdv && item.is_recurring && <RefreshCw size={10} style={{ color: 'var(--primary)', flexShrink: 0 }} />}
+                              {!isAdv && item.is_validated === false && (
+                                <span className="badge-status pending" style={{ fontSize: '9px', padding: '1px 6px', flexShrink: 0 }}>À valider ⏳</span>
+                              )}
+                              
+                              {!isAdv && (
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    openCommentsForCharge(item);
+                                  }}
+                                  style={{
+                                    background: 'none',
+                                    border: 'none',
+                                    padding: '2px 4px',
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    gap: '3px',
+                                    cursor: 'pointer',
+                                    color: (comments[item.id!] && comments[item.id!].length > 0) ? 'var(--primary)' : 'var(--text-light)',
+                                    opacity: (comments[item.id!] && comments[item.id!].length > 0) ? 1 : 0.4,
+                                    transition: 'opacity 0.2s',
+                                    borderRadius: '4px',
+                                    flexShrink: 0
+                                  }}
+                                  className="comment-icon-btn"
+                                  title="Poser une question / Voir les commentaires"
+                                >
+                                  <MessageSquare size={11} />
+                                  {comments[item.id!] && comments[item.id!].length > 0 && (
+                                    <span style={{ fontSize: '9px', fontWeight: 'bold' }}>{comments[item.id!].length}</span>
+                                  )}
+                                </button>
+                              )}
+                            </div>
+                            <div className="charge-meta">
+                              Saisi par : {getPartnerName(paidBy)} {formatDateTime(item.created_at)}
+                              {hasBeenModified(item) && ` • Modifié par : ${getPartnerName(item.modified_by || paidBy)} ${formatDateTime(item.updated_at)}`}
+                              {!isAdv && item.is_validated === false && (
+                                <span style={{ color: 'var(--warning)', fontWeight: 'bold', marginLeft: '6px' }}>• Reconduite (Non validée)</span>
+                              )}
+                              {` • Clé : `}
+                              {
+                                split === 'proportional' ? 'Prorata' :
+                                split === '50_50' ? '50/50' :
+                                split === 'user1_only' ? `100% ${p1Name}` : `100% ${p2Name}`
+                              }
+                            </div>
                           </div>
-                          <div className="charge-meta">
-                            {charge.is_validated === false ? (
-                              <span style={{ color: 'var(--warning)', fontWeight: 'bold' }}>Reconduite • Non validée</span>
-                            ) : (
-                              <>
-                                Saisi par : {getPartnerName(charge.added_by)}
-                                {charge.modified_by && ` • Modifié par : ${getPartnerName(charge.modified_by)}`}
-                              </>
-                            )}
-                            {` • Clé : `}
-                            {
-                              charge.split_method === 'proportional' ? 'Prorata' :
-                              charge.split_method === '50_50' ? '50/50' :
-                              charge.split_method === 'user1_only' ? `100% ${p1Name}` : `100% ${p2Name}`
-                            }
-                          </div>
-                        </div>
 
-                        <div className="charge-pricing">
-                          <span className="charge-val">{charge.amount.toFixed(2)} €</span>
-                          <div className="charge-split">
-                            <span className="charge-split-s">
-                              {p1Name.charAt(0)} : {(
-                                charge.split_method === 'proportional' ? charge.amount * calculations.ratioSam :
-                                charge.split_method === '50_50' ? charge.amount / 2 :
-                                charge.split_method === 'user1_only' ? charge.amount : 0
-                              ).toFixed(1)}
-                            </span>
-                            <span className="charge-split-a">
-                              {p2Name.charAt(0)} : {(
-                                charge.split_method === 'proportional' ? charge.amount * calculations.ratioAurelie :
-                                charge.split_method === '50_50' ? charge.amount / 2 :
-                                charge.split_method === 'user2_only' ? charge.amount : 0
-                              ).toFixed(1)}
-                            </span>
+                          <div className="charge-pricing">
+                            <span className="charge-val">{amount.toFixed(2)} €</span>
+                            <div className="charge-split">
+                              <span className="charge-split-s">
+                                {p1Name.charAt(0)} : {(
+                                  split === 'proportional' ? amount * calculations.ratioSam :
+                                  split === '50_50' ? amount / 2 :
+                                  split === 'user1_only' ? amount : 0
+                                ).toFixed(1)}
+                              </span>
+                              <span className="charge-split-a">
+                                {p2Name.charAt(0)} : {(
+                                  split === 'proportional' ? amount * calculations.ratioAurelie :
+                                  split === '50_50' ? amount / 2 :
+                                  split === 'user2_only' ? amount : 0
+                                ).toFixed(1)}
+                              </span>
+                            </div>
                           </div>
-                        </div>
 
-                        {(selectedMonth.status === 'draft' || selectedMonth.status === 'reopened') && (
-                          <div className="actions-row">
-                            {charge.is_validated === false && (
+                          {(selectedMonth.status === 'draft' || selectedMonth.status === 'reopened') && (
+                            <div className="actions-row">
+                              {!isAdv && item.is_validated === false && (
+                                <button 
+                                  className="btn-icon" 
+                                  style={{ background: 'var(--success-light)', color: 'var(--success)', display: 'flex', alignItems: 'center', justifyContent: 'center' }} 
+                                  onClick={() => handleValidateCharge(item)}
+                                  title="Valider la charge reconduite"
+                                >
+                                  <CheckCircle2 size={13} />
+                                </button>
+                              )}
                               <button 
                                 className="btn-icon" 
-                                style={{ background: 'var(--success-light)', color: 'var(--success)', display: 'flex', alignItems: 'center', justifyContent: 'center' }} 
-                                onClick={() => handleValidateCharge(charge)}
-                                title="Valider la charge reconduite"
+                                onClick={() => isAdv ? openEditAdvance(item) : openEditCharge(item)}
+                                title={!isAdv && item.is_validated === false ? "Modifier et valider" : "Modifier"}
                               >
-                                <CheckCircle2 size={13} />
+                                <Edit2 size={13} />
                               </button>
-                            )}
-                            <button 
-                              className="btn-icon" 
-                              onClick={() => openEditCharge(charge)}
-                              title={charge.is_validated === false ? "Modifier et valider" : "Modifier"}
-                            >
-                              <Edit2 size={13} />
-                            </button>
-                            <button className="btn-icon delete" onClick={() => handleDeleteCharge(charge.id!, charge.label)} title="Supprimer">
-                              <Trash2 size={13} />
-                            </button>
-                          </div>
-                        )}
-                      </div>
-                    ))
+                              {((isAdv && item.assigned_to === currentPartner) || (!isAdv && item.added_by === currentPartner)) && (
+                                <button 
+                                  className="btn-icon delete" 
+                                  onClick={() => isAdv ? handleDeleteAdvance(item.id!, label) : handleDeleteCharge(item.id!, item.label)} 
+                                  title="Supprimer"
+                                >
+                                  <Trash2 size={13} />
+                                </button>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })
                   )}
                 </div>
               );
@@ -2082,30 +2162,45 @@ export default function App() {
                 </div>
               ) : (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                  {advances.map(adv => (
-                    <div key={adv.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '13px' }}>
-                      <div>
-                        <div style={{ fontWeight: '600' }}>{adv.label}</div>
-                        <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
-                          Saisi par : {getPartnerName(adv.assigned_to)}
-                          {adv.modified_by && ` • Modifié par : ${getPartnerName(adv.modified_by)}`}
+                  {advances.map(adv => {
+                    const parsed = parseAdvance(adv);
+                    const getSplitLabel = (method?: string) => {
+                      if (!method || method === '50_50') return '50/50';
+                      if (method === 'proportional') return 'Prorata';
+                      if (method === 'user1_only') return `100% ${p1Name}`;
+                      if (method === 'user2_only') return `100% ${p2Name}`;
+                      return method;
+                    };
+                    const catName = categories.find(c => c.id === parsed.category_id)?.name || parsed.category_id;
+                    return (
+                      <div key={adv.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '13px' }}>
+                        <div>
+                          <div style={{ fontWeight: '600' }}>{parsed.cleanLabel}</div>
+                          <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
+                            Saisi par : {getPartnerName(adv.assigned_to)} {formatDateTime(adv.created_at)}
+                            {hasBeenModified(parsed) && ` • Modifié par : ${getPartnerName(adv.modified_by || adv.assigned_to)} ${formatDateTime(parsed.updated_at)}`}
+                            {parsed.category_id !== 'autres' && ` • Catégorie : ${catName}`}
+                            {parsed.split_method !== '50_50' && ` • Répartition : ${getSplitLabel(parsed.split_method)}`}
+                          </div>
+                        </div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                          <span style={{ fontWeight: '700', marginRight: '4px' }}>{adv.amount.toFixed(2)} €</span>
+                          {(selectedMonth.status === 'draft' || selectedMonth.status === 'reopened') && (
+                            <div className="actions-row">
+                              <button className="btn-icon" onClick={() => openEditAdvance(adv)}>
+                                <Edit2 size={12} />
+                              </button>
+                              {adv.assigned_to === currentPartner && (
+                                <button className="btn-icon delete" onClick={() => handleDeleteAdvance(adv.id!, parsed.cleanLabel)}>
+                                  <Trash2 size={12} />
+                                </button>
+                              )}
+                            </div>
+                          )}
                         </div>
                       </div>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                        <span style={{ fontWeight: '700', marginRight: '4px' }}>{adv.amount.toFixed(2)} €</span>
-                        {(selectedMonth.status === 'draft' || selectedMonth.status === 'reopened') && (
-                          <div className="actions-row">
-                            <button className="btn-icon" onClick={() => openEditAdvance(adv)}>
-                              <Edit2 size={12} />
-                            </button>
-                            <button className="btn-icon delete" onClick={() => handleDeleteAdvance(adv.id!, adv.label)}>
-                              <Trash2 size={12} />
-                            </button>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               )}
 
@@ -2675,7 +2770,7 @@ export default function App() {
                     className={`chip-btn ${chargeCat === cat.id ? 'active' : ''}`}
                     onClick={() => setChargeCat(cat.id)}
                   >
-                    {cat.name}
+                    {cat.id === 'autres' ? "Paiement direct (Avance)" : cat.name}
                   </button>
                 ))}
               </div>
@@ -2785,29 +2880,28 @@ export default function App() {
                 onChange={e => setSelectedCategoryInModal(e.target.value)}
                 style={{ fontSize: '13px' }}
               >
-                <option value="advance">Paiement direct (Avance)</option>
                 {categories.map(c => (
-                  <option key={c.id} value={c.id}>{c.name}</option>
+                  <option key={c.id} value={c.id}>
+                    {c.id === 'autres' ? "Paiement direct (Avance)" : c.name}
+                  </option>
                 ))}
               </select>
             </div>
 
-            {selectedCategoryInModal !== 'advance' && (
-              <div className="form-group" style={{ marginBottom: '14px' }}>
-                <label>Règle de répartition</label>
-                <select
-                  className="input-field"
-                  value={selectedSplitMethodInModal}
-                  onChange={e => setSelectedSplitMethodInModal(e.target.value)}
-                  style={{ fontSize: '13px' }}
-                >
-                  <option value="50_50">50 / 50</option>
-                  <option value="proportional">Au prorata des revenus ({Math.round(calculations.ratioSam * 100)}% Sam / {Math.round(calculations.ratioAurelie * 100)}% Aurélie)</option>
-                  <option value="user1_only">100% {p1Name}</option>
-                  <option value="user2_only">100% {p2Name}</option>
-                </select>
-              </div>
-            )}
+            <div className="form-group" style={{ marginBottom: '14px' }}>
+              <label>Règle de répartition</label>
+              <select
+                className="input-field"
+                value={selectedSplitMethodInModal}
+                onChange={e => setSelectedSplitMethodInModal(e.target.value)}
+                style={{ fontSize: '13px' }}
+              >
+                <option value="50_50">50 / 50</option>
+                <option value="proportional">Au prorata des revenus ({Math.round(calculations.ratioSam * 100)}% Sam / {Math.round(calculations.ratioAurelie * 100)}% Aurélie)</option>
+                <option value="user1_only">100% {p1Name}</option>
+                <option value="user2_only">100% {p2Name}</option>
+              </select>
+            </div>
 
             <div style={{ display: 'flex', gap: '10px', marginTop: '10px' }}>
               <button className="btn-secondary" onClick={() => { setShowAddAdvanceModal(false); setAdvanceToEdit(null); }}>Annuler</button>
