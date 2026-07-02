@@ -2008,6 +2008,16 @@ export default function App() {
                       const label = isAdv ? item.cleanLabel : item.label;
                       const split = item.split_method;
                       const amount = item.amount;
+                      const samShare = (
+                        split === 'proportional' ? amount * calculations.ratioSam :
+                        split === '50_50' ? amount / 2 :
+                        split === 'user1_only' ? amount : 0
+                      );
+                      const aurelieShare = (
+                        split === 'proportional' ? amount * calculations.ratioAurelie :
+                        split === '50_50' ? amount / 2 :
+                        split === 'user2_only' ? amount : 0
+                      );
                       
                       return (
                         <div key={item.id} className="table-row">
@@ -2060,33 +2070,17 @@ export default function App() {
                               {!isAdv && item.is_validated === false && (
                                 <span style={{ color: 'var(--warning)', fontWeight: 'bold', marginLeft: '6px' }}>• Reconduite (Non validée)</span>
                               )}
-                              {` • Clé : `}
-                              {
-                                split === 'proportional' ? 'Prorata' :
-                                split === '50_50' ? '50/50' :
-                                split === 'user1_only' ? `100% ${p1Name}` : `100% ${p2Name}`
-                              }
+                              {` • `}
+                              (
+                              <span style={{ color: 'var(--primary)', fontWeight: '600' }}>S : {samShare.toFixed(1)}</span>
+                              {` `}
+                              <span style={{ color: 'var(--secondary)', fontWeight: '600' }}>A : {aurelieShare.toFixed(1)}</span>
+                              )
                             </div>
                           </div>
 
-                          <div className="charge-pricing">
+                          <div className="charge-pricing" style={{ justifyContent: 'center' }}>
                             <span className="charge-val">{amount.toFixed(2)} €</span>
-                            <div className="charge-split">
-                              <span className="charge-split-s">
-                                {p1Name.charAt(0)} : {(
-                                  split === 'proportional' ? amount * calculations.ratioSam :
-                                  split === '50_50' ? amount / 2 :
-                                  split === 'user1_only' ? amount : 0
-                                ).toFixed(1)}
-                              </span>
-                              <span className="charge-split-a">
-                                {p2Name.charAt(0)} : {(
-                                  split === 'proportional' ? amount * calculations.ratioAurelie :
-                                  split === '50_50' ? amount / 2 :
-                                  split === 'user2_only' ? amount : 0
-                                ).toFixed(1)}
-                              </span>
-                            </div>
                           </div>
 
                           {(selectedMonth.status === 'draft' || selectedMonth.status === 'reopened') && (
@@ -2163,14 +2157,17 @@ export default function App() {
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                   {advances.map(adv => {
                     const parsed = parseAdvance(adv);
-                    const getSplitLabel = (method?: string) => {
-                      if (!method || method === '50_50') return '50/50';
-                      if (method === 'proportional') return 'Prorata';
-                      if (method === 'user1_only') return `100% ${p1Name}`;
-                      if (method === 'user2_only') return `100% ${p2Name}`;
-                      return method;
-                    };
                     const catName = categories.find(c => c.id === parsed.category_id)?.name || parsed.category_id;
+                    const samShare = (
+                      parsed.split_method === 'proportional' ? adv.amount * calculations.ratioSam :
+                      parsed.split_method === '50_50' ? adv.amount / 2 :
+                      parsed.split_method === 'user1_only' ? adv.amount : 0
+                    );
+                    const aurelieShare = (
+                      parsed.split_method === 'proportional' ? adv.amount * calculations.ratioAurelie :
+                      parsed.split_method === '50_50' ? adv.amount / 2 :
+                      parsed.split_method === 'user2_only' ? adv.amount : 0
+                    );
                     return (
                       <div key={adv.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '13px', padding: '4px 0', borderBottom: '1px solid var(--border)', lastChild: { borderBottom: 'none' } } as any}>
                         <div style={{ flex: 1, minWidth: 0, paddingRight: '8px' }}>
@@ -2179,7 +2176,12 @@ export default function App() {
                             Saisi par : {getPartnerName(adv.assigned_to)} {formatDateTime(adv.created_at)}
                             {hasBeenModified(parsed) && ` • Modifié par : ${getPartnerName(adv.modified_by || adv.assigned_to)} ${formatDateTime(parsed.updated_at)}`}
                             {parsed.category_id !== 'autres' && ` • Catégorie : ${catName}`}
-                            {` • Clé : ${getSplitLabel(parsed.split_method)}`}
+                            {` • `}
+                            (
+                            <span style={{ color: 'var(--primary)', fontWeight: '600' }}>S : {samShare.toFixed(1)}</span>
+                            {` `}
+                            <span style={{ color: 'var(--secondary)', fontWeight: '600' }}>A : {aurelieShare.toFixed(1)}</span>
+                            )
                           </div>
                         </div>
                         <div style={{ display: 'flex', alignItems: 'center', flexShrink: 0 }}>
