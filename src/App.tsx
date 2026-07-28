@@ -183,6 +183,7 @@ export default function App() {
   const [isJoinMode, setIsJoinMode] = useState(false);
   const [joinCodeInput, setJoinCodeInput] = useState('');
   const [onboardingError, setOnboardingError] = useState<string | null>(null);
+  const [loadingError, setLoadingError] = useState<string | null>(null);
   const [newFoyerName, setNewFoyerName] = useState('Foyer Pérouse');
   const [p1NameInput, setP1NameInput] = useState('Sam');
   const [p2NameInput, setP2NameInput] = useState('Aurélie');
@@ -312,6 +313,7 @@ export default function App() {
   const loadAllData = async (code: string) => {
     try {
       setIsLoading(true);
+      setLoadingError(null);
       const hh = await getHousehold(code);
       if (!hh) {
         localStorage.removeItem('share_it_household_id');
@@ -376,8 +378,9 @@ export default function App() {
       // Load activity logs
       await loadActivityLogs(code);
 
-    } catch (err) {
+    } catch (err: any) {
       console.error("Erreur lors du chargement des données Supabase", err);
+      setLoadingError(err?.message || String(err) || "Une erreur de connexion ou un blocage réseau est survenu.");
     } finally {
       setIsLoading(false);
     }
@@ -1591,6 +1594,33 @@ export default function App() {
             style={{ color: 'var(--primary)', fontWeight: '600', fontSize: '13px', textDecoration: 'underline', marginTop: '4px' }}
           >
             {isJoinMode ? "Ou, créer un nouveau foyer" : "Ou, rejoindre un foyer existant d'un partenaire"}
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  // Écran d'erreur de chargement
+  if (loadingError) {
+    return (
+      <div className="container" style={{ justifyContent: 'center', alignItems: 'center', padding: '24px', textAlign: 'center' }}>
+        <AlertCircle size={48} style={{ color: 'var(--error)', marginBottom: '16px' }} />
+        <h2 style={{ fontSize: '20px', fontWeight: '700', marginBottom: '8px' }}>Erreur de connexion</h2>
+        <p style={{ color: 'var(--text-muted)', fontSize: '14px', marginBottom: '20px', maxWidth: '360px', lineHeight: '1.5' }}>
+          L'application n'a pas pu se connecter à la base de données. Si vous utilisez un navigateur ou une extension avec protection renforcée (comme DuckDuckGo, Brave, ou un bloqueur de publicités), veuillez autoriser les connexions à <strong>supabase.co</strong> pour ce site.
+        </p>
+        <div style={{ fontSize: '12px', color: 'var(--error)', background: 'var(--error-light)', padding: '10px 14px', borderRadius: 'var(--radius-sm)', marginBottom: '24px', maxWidth: '100%', wordBreak: 'break-word', fontFamily: 'monospace' }}>
+          {loadingError}
+        </div>
+        <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap', justifyContent: 'center' }}>
+          <button className="btn-primary" style={{ width: 'auto', padding: '10px 20px' }} onClick={() => loadAllData(householdId!)}>
+            Réessayer
+          </button>
+          <button className="btn-secondary" style={{ width: 'auto', padding: '10px 20px' }} onClick={() => {
+            localStorage.clear();
+            window.location.reload();
+          }}>
+            Réinitialiser l'application
           </button>
         </div>
       </div>
