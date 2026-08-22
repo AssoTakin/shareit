@@ -2105,7 +2105,7 @@ export default function App() {
                             <div className="charge-meta" style={{ display: 'flex', flexDirection: 'column', gap: '2px', marginTop: '4px' }}>
                               <div>👤 {getPartnerShort(paidBy)} • 🕒 {formatDateTimeShort(item.created_at)}</div>
                               {hasBeenModified(item) && (
-                                <div>✏️ {getPartnerShort(item.modified_by || (paidBy === 'partner1' ? 'partner2' : 'partner1'))} • 🕒 {formatDateTimeShort(item.updated_at)}</div>
+                                <div>✏️ {getPartnerShort(item.modified_by || paidBy)} • 🕒 {formatDateTimeShort(item.updated_at)}</div>
                               )}
                               <div>
                                 (
@@ -2218,7 +2218,7 @@ export default function App() {
                           <div className="charge-meta" style={{ display: 'flex', flexDirection: 'column', gap: '2px', marginTop: '4px' }}>
                             <div>👤 {getPartnerShort(adv.assigned_to)} • 🕒 {formatDateTimeShort(adv.created_at)}</div>
                             {hasBeenModified(parsed) && (
-                              <div>✏️ {getPartnerShort(parsed.modified_by || (adv.assigned_to === 'partner1' ? 'partner2' : 'partner1'))} • 🕒 {formatDateTimeShort(parsed.updated_at)}</div>
+                              <div>✏️ {getPartnerShort(parsed.modified_by || adv.assigned_to)} • 🕒 {formatDateTimeShort(parsed.updated_at)}</div>
                             )}
                             {parsed.category_id !== 'autres' && <div>Catégorie : {catName}</div>}
                             <div>
