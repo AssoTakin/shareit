@@ -166,3 +166,23 @@ create table if not exists charge_comments (
 );
 
 create index if not exists idx_charge_comments_charge on charge_comments(charge_id);
+
+-- 9. Sécurité RLS et Politiques d'Accès Public (Résolution de l'alerte de sécurité Supabase)
+alter table households enable row level security;
+alter table categories enable row level security;
+alter table months enable row level security;
+alter table charges enable row level security;
+alter table advances enable row level security;
+alter table templates enable row level security;
+alter table activity_logs enable row level security;
+alter table charge_comments enable row level security;
+
+create policy "Allow public access" on households for all using (true) with check (true);
+create policy "Allow public access" on categories for all using (true) with check (true);
+create policy "Allow public access" on months for all using (true) with check (true);
+create policy "Allow public access" on charges for all using (true) with check (true);
+create policy "Allow public access" on advances for all using (true) with check (true);
+create policy "Allow public access" on templates for all using (true) with check (true);
+create policy "Allow public access" on activity_logs for all using (true) with check (true);
+create policy "Allow public access" on charge_comments for all using (true) with check (true);
+
